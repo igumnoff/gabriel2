@@ -14,9 +14,6 @@ description = "Gabriel2: Indeed, an actor library, not a framework, written in R
 
 
 
-
-
-
 [dependencies]
 futures = "0.3.26"
 async-trait = "0.1.73"
