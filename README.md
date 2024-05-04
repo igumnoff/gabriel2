@@ -1,6 +1,6 @@
 # Gabriel2
 
-![Gabriel2](logo.png)
+![Gabriel2](https://github.com/igumnoff/gabriel2/blob/main/logo.png)
 
 Gabriel2: Indeed, an actor library, not a framework, written in Rust
 
