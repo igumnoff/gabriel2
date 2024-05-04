@@ -1,6 +1,6 @@
 # Gabriel2
 
-![Gabriel2](https://github.com/igumnoff/gabriel2/blob/main/logo.png)
+![Gabriel2](https://github.com/igumnoff/gabriel2/raw/HEAD/logo.png)
 
 Gabriel2: Indeed, an actor library, not a framework, written in Rust
 
@@ -20,7 +20,7 @@ Cargo.toml
 
 ```toml
 [dependencies]
-gabriel2 = "1.0.1"
+gabriel2 = "1.0.5"
 ```
 
 echo.rs
