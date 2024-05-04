@@ -29,7 +29,7 @@ mod tests {
     use std::fmt::Debug;
     use std::sync::{Arc};
     use std::time::Duration;
-    use actorlib::*;
+    use gabriel2::*;
     use async_trait::async_trait;
 
     use thiserror::Error;
@@ -40,13 +40,16 @@ mod tests {
     #[derive(Debug)]
     pub enum UserMessage {
         CreateAccount { account_id: u32, } ,
+        #[allow(dead_code)]
         GetBalance { account_id: u32, },
+        #[allow(dead_code)]
         MoveMoney { from_account_id: u32, to_account_id: u32, amount: u32 },
     }
 
     #[derive(Debug)]
     pub enum UserResponse {
         Balance { amount: u32, },
+        #[allow(dead_code)]
         AccountCreated { account_id: u32, },
         Ok,
     }
@@ -58,6 +61,7 @@ mod tests {
     #[derive(Error, Debug)]
     pub enum UserError {
         #[error("unknown error")]
+        #[allow(dead_code)]
         Unknown,
         #[error("std::io::Error")]
         StdErr(#[from] std::io::Error),
@@ -68,7 +72,7 @@ mod tests {
 
         async fn receive(&self, ctx: Arc<Context<UserActor, UserMessage, UserState, UserResponse, UserError>>) -> Result<UserResponse, UserError> {
             match ctx.mgs {
-                UserMessage::GetBalance { .. } => {
+                UserMessage::GetBalance { account_id: _ } => {
                     Ok(UserResponse::Balance { amount: 100 })
                 }
                 _ => {
@@ -84,14 +88,14 @@ mod tests {
     async fn test_2() -> Result<(), UserError> {
         let _ = env_logger::Builder::from_env(env_logger::Env::new().default_filter_or("trace")).try_init();
 
-        let mut user:Arc<ActorRef<UserActor, UserMessage, UserState, UserResponse, UserError>>  = ActorRef::new("user".to_string(),
+        let user:Arc<ActorRef<UserActor, UserMessage, UserState, UserResponse, UserError>>  = ActorRef::new("user".to_string(),
            UserActor {}, UserState {name: "".to_string()}, 10000).await?;
 
-        let result1: UserResponse = user.ask(UserMessage::CreateAccount{ account_id: 0 }).await?;
+        let _result1: UserResponse = user.ask(UserMessage::CreateAccount{ account_id: 0 }).await?;
         {
             let actor_state = user.state().await?;
             let state_lock = actor_state.lock().await;
-            let name_from_state = state_lock.name.clone();
+            let _name_from_state = state_lock.name.clone();
 
         }
         let user_clone = user.clone();
@@ -100,9 +104,9 @@ mod tests {
             let _ = user.send(UserMessage::CreateAccount { account_id: 2 }).await;
             let _ = user.send(UserMessage::CreateAccount { account_id: 3 }).await;
         });
-        tokio::spawn(async move {
+        let _ = tokio::spawn(async move {
             tokio::time::sleep(Duration::from_millis(200)).await;
-            user_clone.stop().await;
+            let _ = user_clone.stop().await;
         });
         tokio::time::sleep(Duration::from_millis(1000)).await;
         Ok(())

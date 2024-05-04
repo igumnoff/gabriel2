@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use actorlib::*;
+use gabriel2::*;
 use thiserror::Error;
 
 use async_trait::async_trait;
