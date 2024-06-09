@@ -1,5 +1,5 @@
 //!
-#![doc = include_str!("../README.md")]
+// #![doc = include_str!("../README.md")]
 //!
 
 
@@ -53,9 +53,16 @@ pub struct ActorRef<Actor, Message, State, Response, Error> {
     message_id: Mutex<i32>,
     promise: Mutex<HashMap<i32, Sender<Result<Response, Error>>>>,
     name: String,
-    actor: Arc<Actor>,
+    actor: Mutex<Option<Arc<Actor>>>,
     running: Mutex<bool>,
 }
+
+impl<Actor, Message, State, Response, Error>  Drop for ActorRef<Actor, Message, State, Response, Error>  {
+    fn drop(&mut self) {
+        log::debug!("Drop actor: ", self.name);
+    }
+}
+
 /// `Context` is a structure that holds the context of an actor.
 ///
 /// It contains the following fields:
@@ -147,7 +154,7 @@ impl<Actor: Handler<Actor, Message, State, Response, Error> + Debug + Send + Syn
             message_id: Mutex::new(0),
             promise: Mutex::new(HashMap::new()),
             name: name,
-            actor: actor_arc.clone(),
+            actor: Mutex::new(Some(actor_arc.clone())),
             running: Mutex::new(false),
         };
 
@@ -369,8 +376,15 @@ impl<Actor: Handler<Actor, Message, State, Response, Error> + Debug + Send + Syn
         if *self.running.lock().await == false {
             return Ok(());
         }
-        let self_ref =  self.self_ref.lock().await.clone().unwrap();
-        let _ = self.actor.pre_stop(self.state.clone().unwrap(), self_ref).await?;
+        {
+            let self_ref =  self.self_ref.lock().await.clone().unwrap();
+            let mut lock = self.actor.lock().await;
+            let actor = lock.as_ref().unwrap();
+            actor.pre_stop(self.state.clone().unwrap(), self_ref).await?;
+            *lock = None;
+        }
+        *self.self_ref.lock().await = None;
+
         *self.running.lock().await = false;
         *self.tx.lock().await = None;
         *self.self_ref.lock().await = None;
