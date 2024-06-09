@@ -14,7 +14,8 @@ pub struct ActorServer<Actor, Message, State, Response, Error> {
 
 
 impl<Actor: Handler<Actor, Message, State, Response, Error> + Debug + Send + Sync + 'static, Message: Debug + Send + Sync + 'static, State: Debug + Send + Sync + 'static,
-    Response: Debug + Send + Sync + 'static, Error: std::error::Error + Debug + Send + Sync + From<std::io::Error> + 'static> ActorServer<Actor, Message, State, Response, Error> {
+    Response: Debug + Send + Sync + 'static, Error: std::error::Error + Debug + Send + Sync + From<std::io::Error> + 'static>
+ActorServer<Actor, Message, State, Response, Error> {
     pub async fn new(name: impl AsRef<str>, host: impl AsRef<str>, port: u16, actor: Arc<ActorRef<Actor,Message, State, Response, Error>>) -> Result<Arc<Self>, Error>
     {
 
@@ -88,7 +89,8 @@ pub struct ActorClient<Actor, Message, State, Response, Error> {
 
 
 impl<Actor: Handler<Actor, Message, State, Response, Error> + Debug + Send + Sync + 'static, Message: Debug + Send + Sync + 'static, State: Debug + Send + Sync + 'static,
-    Response: Debug + Send + Sync + 'static, Error: std::error::Error + Debug + Send + Sync + From<std::io::Error> + 'static> crate::remote::ActorClient<Actor, Message, State, Response, Error> {
+    Response: Debug + Send + Sync + 'static, Error: std::error::Error + Debug + Send + Sync + From<std::io::Error> + 'static>
+ActorClient<Actor, Message, State, Response, Error> {
     pub async fn new(name: impl AsRef<str>, host: impl AsRef<str>, port: u16) -> Result<Arc<Self>, Error>
     {
         let address = format!("{}:{}", host.as_ref(), port);
