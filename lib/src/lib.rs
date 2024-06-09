@@ -2,6 +2,7 @@
 // #![doc = include_str!("../README.md")]
 //!
 
+#[cfg(feature = "remote")]
 pub mod remote;
 
 use std::collections::HashMap;
