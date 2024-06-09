@@ -119,17 +119,17 @@ mod tests {
             counter: 0,
         };
 
-        let echo = ActorRef::new("echo".to_string(), crate::echo::Echo {}, state, 100000).await?;
-        let echo_server = ActorServer::new("echo_server","127.0.0.1", 9001,echo).await?;
-        let echo_ref: Arc<ActorClient<Echo, Message, State, Response, EchoError >> = ActorClient::new("echo_client", "127.0.0.1", 9001).await?;
+        let echo_ref = ActorRef::new("echo".to_string(), crate::echo::Echo {}, state, 100000).await?;
+        let echo_server = ActorServer::new("echo_server", "127.0.0.1", 9001, echo_ref).await?;
+        let echo_client: Arc<ActorClient<Echo, Message, State, Response, EchoError >> = ActorClient::new("echo_client", "127.0.0.1", 9001).await?;
         println!("Sent Ping");
-        echo_ref.send(Message::Ping).await?;
+        echo_client.send(Message::Ping).await?;
 
         println!("Sent Ping and ask response");
-        let pong = echo_ref.ask(Message::Ping).await?;
+        let pong = echo_client.ask(Message::Ping).await?;
         println!("Got {:?}", pong);
 
-        _ = echo_ref.stop().await;
+        _ = echo_client.stop().await;
         _ = echo_server.stop().await;
         Ok(())
     }
