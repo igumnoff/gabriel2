@@ -2,7 +2,7 @@
 
 ![Gabriel2](https://github.com/igumnoff/gabriel2/raw/HEAD/logo.png)
 
-Gabriel2: Indeed, an actor library, not a framework, written in Rust
+Gabriel2: Indeed, an actor library for Tokio, not a framework, written in Rust
 
 ## Features
 
