@@ -121,7 +121,10 @@ mod tests {
 
         let echo_ref = ActorRef::new("echo".to_string(), crate::echo::Echo {}, state, 100000).await?;
         let echo_server = ActorServer::new("echo_server", "127.0.0.1", 9001, echo_ref).await?;
+        tokio::time::sleep(Duration::from_millis(1000)).await;
         let echo_client: Arc<ActorClient<Echo, Message, State, Response, EchoError >> = ActorClient::new("echo_client", "127.0.0.1", 9001).await?;
+        println!("Connected to the server!");
+        tokio::time::sleep(Duration::from_millis(1000)).await;
         println!("Sent Ping");
         echo_client.send(Message::Ping).await?;
 
