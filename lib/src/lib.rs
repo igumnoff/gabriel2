@@ -2,7 +2,7 @@
 // #![doc = include_str!("../README.md")]
 //!
 
-
+pub mod remote;
 
 use std::collections::HashMap;
 use std::fmt::Debug;

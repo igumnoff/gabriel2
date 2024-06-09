@@ -1,6 +1,5 @@
 mod echo;
 
-use std::time::Duration;
 use gabriel2::*;
 use echo::*;
 #[tokio::main]
@@ -18,8 +17,7 @@ async fn main() -> Result<(), EchoError> {
     let pong = echo_ref.ask(Message::Ping).await?;
     println!("Got {:?}", pong);
 
-    _ = echo_ref.stop();
-    tokio::time::sleep(Duration::from_millis(1000)).await;
+    _ = echo_ref.stop().await;
     Ok(())
 }
 
@@ -33,6 +31,7 @@ mod tests {
     use async_trait::async_trait;
 
     use thiserror::Error;
+    use crate::echo::{Echo, EchoError, Message, Response, State};
 
     #[derive(Debug)]
     pub struct UserActor;
@@ -111,5 +110,29 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(1000)).await;
         Ok(())
     }
+
+
+    #[tokio::test]
+    async fn test_remote() -> anyhow::Result<()> {
+        use gabriel2::remote::*;
+        let state = State {
+            counter: 0,
+        };
+
+        let echo = ActorRef::new("echo".to_string(), crate::echo::Echo {}, state, 100000).await?;
+        let echo_server = ActorServer::new("echo_server","127.0.0.1", 9001,echo).await?;
+        let echo_ref: Arc<ActorClient<Echo, Message, State, Response, EchoError >> = ActorClient::new("echo_client", "127.0.0.1", 9001).await?;
+        println!("Sent Ping");
+        echo_ref.send(Message::Ping).await?;
+
+        println!("Sent Ping and ask response");
+        let pong = echo_ref.ask(Message::Ping).await?;
+        println!("Got {:?}", pong);
+
+        _ = echo_ref.stop().await;
+        _ = echo_server.stop().await;
+        Ok(())
+    }
+
 }
 

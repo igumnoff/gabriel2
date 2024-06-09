@@ -19,4 +19,5 @@ futures = "0.3.26"
 async-trait = "0.1.73"
 log = "0.4.17"
 
-tokio = { version = "1.25.0", features = ["full"] }
+tokio = { version = "1.25.0", features = ["net"] }
+

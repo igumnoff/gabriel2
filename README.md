@@ -92,8 +92,7 @@ async fn main() -> Result<(), EchoError> {
     let pong = echo_ref.ask(Message::Ping).await?;
     println!("Got {:?}", pong);
 
-    _ = echo_ref.stop();
-    tokio::time::sleep(Duration::from_millis(1000)).await;
+    _ = echo_ref.stop().await;
     Ok(())
 }
 ```
