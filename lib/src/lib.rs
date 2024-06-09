@@ -165,7 +165,8 @@ impl<Actor: Handler<Actor, Message, State, Response, Error> + Debug + Send + Syn
         let ret_clone3 = ret.clone();
         *ret.self_ref.lock().await = Some(ret.clone());
 
-        let join_handle = tokio::spawn(async move {
+        let handle = tokio::runtime::Handle::current();
+        let join_handle = handle.spawn(async move {
             let me = ret_clone2.clone();
 
             loop {

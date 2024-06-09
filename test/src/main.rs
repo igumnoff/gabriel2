@@ -17,7 +17,10 @@ async fn main() -> Result<(), EchoError> {
     let pong = echo_ref.ask(Message::Ping).await?;
     println!("Got {:?}", pong);
 
-    _ = echo_ref.stop().await;
+    // _ = echo_ref.stop().await;
+
+    // ctrl-c wait
+    tokio::signal::ctrl_c().await?;
     Ok(())
 }
 
@@ -115,6 +118,9 @@ mod tests {
     #[tokio::test]
     async fn test_remote() -> anyhow::Result<()> {
         use gabriel2::remote::*;
+        let _ = env_logger::Builder::from_env(env_logger::Env::new().default_filter_or("trace")).try_init();
+
+
         let state = State {
             counter: 0,
         };
@@ -123,10 +129,10 @@ mod tests {
         let echo_server = ActorServer::new("echo_server", "127.0.0.1", 9001, echo_ref).await?;
         tokio::time::sleep(Duration::from_millis(1000)).await;
         let echo_client: Arc<ActorClient<Echo, Message, State, Response, EchoError >> = ActorClient::new("echo_client", "127.0.0.1", 9001).await?;
-        println!("Connected to the server!");
         tokio::time::sleep(Duration::from_millis(1000)).await;
         println!("Sent Ping");
         echo_client.send(Message::Ping).await?;
+        tokio::time::sleep(Duration::from_millis(1000)).await;
 
         println!("Sent Ping and ask response");
         let pong = echo_client.ask(Message::Ping).await?;
