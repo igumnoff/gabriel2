@@ -13,7 +13,7 @@ Gabriel2: Indeed, an actor library for Tokio, not a framework, written in Rust
 - [x] Mutable state of actor
 - [x] Self reference in actor from context
 - [x] Actor lifecycle (pre_start, pre_stop)
-##
+## TODO
 - [ ] Load Balancer
 - [ ] Remote Actor
 
