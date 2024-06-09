@@ -59,7 +59,7 @@ pub struct ActorRef<Actor, Message, State, Response, Error> {
 
 impl<Actor, Message, State, Response, Error>  Drop for ActorRef<Actor, Message, State, Response, Error>  {
     fn drop(&mut self) {
-        log::debug!("Drop actor: ", self.name);
+        log::debug!("Drop actor: {}", self.name);
     }
 }
 
