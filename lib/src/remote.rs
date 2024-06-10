@@ -46,12 +46,16 @@ ActorServer<Actor, Message, State, Response, Error> {
                                         if n == 0 {
                                             break;
                                         }
-                                        let message_result: Result<(u64, crate::remote::Command, Message), std::io::Error> = deserialize(&buf[0..n]).map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err));
+                                        let message_result: Result<(u64, Command, Message), std::io::Error> = deserialize(&buf[0..n]).map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err));
                                         match message_result {
                                             Ok((id, command, message)) => {
-                                                log::info!("<{name}> Received message: {message:#?}");
+                                                log::info!("<{name}> Received message: {message:?}");
                                                 let actor_ref = actor_server_clone2.actor_ref.lock().await;
-                                                actor_ref.as_ref().unwrap().send(message).await.unwrap();
+                                                let send_result = actor_ref.as_ref().unwrap().send(message).await;
+                                                if send_result.is_err() {
+                                                    log::error!("<{name}> Error sending message: {:?}", send_result.err());
+                                                    break
+                                                }
                                             }
                                             Err(err) => {
                                                 log::error!("<{name}> Error deserializing message: {:?}", err);
