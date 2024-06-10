@@ -47,12 +47,12 @@ use tokio::sync::oneshot::Sender;
 /// - `Error`: The type of the error that the actor can produce.
 #[derive(Debug)]
 pub struct ActorRef<Actor, Message, State, Response, Error> {
-    tx: Mutex<Option<mpsc::Sender<(Message, i32)>>>,
+    tx: Mutex<Option<mpsc::Sender<(Message, u64)>>>,
     join_handle: Mutex<Option<tokio::task::JoinHandle<()>>>,
     state: Option<Arc<Mutex<State>>>,
     self_ref: Mutex<Option<Arc<ActorRef<Actor, Message, State, Response, Error>>>>,
-    message_id: Mutex<i32>,
-    promise: Mutex<HashMap<i32, Sender<Result<Response, Error>>>>,
+    message_id: Mutex<u64>,
+    promise: Mutex<HashMap<u64, Sender<Result<Response, Error>>>>,
     name: String,
     actor: Mutex<Option<Arc<Actor>>>,
     running: Mutex<bool>,
@@ -399,6 +399,7 @@ impl<Actor: Handler<Actor, Message, State, Response, Error> + Debug + Send + Syn
             }
         }
         *self.join_handle.lock().await = None;
+        *self.promise.lock().await = HashMap::new();
         log::debug!("<{}> Stop worker", self.name);
         Ok(())
     }

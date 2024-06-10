@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::sync::Arc;
@@ -6,6 +7,7 @@ use bincode::error::{DecodeError, EncodeError};
 use futures::lock::Mutex;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::sync::oneshot::Sender;
 use crate::{ActorRef, Handler};
 
 #[derive(Debug)]
@@ -137,6 +139,7 @@ pub struct ActorClient<Actor, Message, State, Response, Error> {
     write_half: Mutex<tokio::io::WriteHalf<TcpStream>>,
     counter: Mutex<u64>,
     name: String,
+    promise: Mutex<HashMap<u64, Sender<Result<Response, Error>>>>,
 }
 
 
@@ -162,6 +165,7 @@ ActorClient<Actor, Message, State, Response, Error> {
             write_half: Mutex::new(write_half),
             name: name.clone(),
             counter: Mutex::new(0),
+            promise: Mutex::new(HashMap::new()),
         });
 
         let handle = tokio::runtime::Handle::current();
