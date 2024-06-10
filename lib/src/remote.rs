@@ -36,6 +36,7 @@ ActorServer<Actor, Message, State, Response, Error> {
                 match accept_result {
                     Ok((mut socket, address)) => {
                         let name = name.clone();
+                        let actor_server_clone2 = actor_server_clone.clone();
                         handle.spawn(async move {
                             log::info!("<{name}> Connection opened from {address:?}");
                             let mut buf = vec![0; 1024];
@@ -49,7 +50,8 @@ ActorServer<Actor, Message, State, Response, Error> {
                                         match message_result {
                                             Ok((id, command, message)) => {
                                                 log::info!("<{name}> Received message: {message:#?}");
-
+                                                let actor_ref = actor_server_clone2.actor_ref.lock().await;
+                                                actor_ref.as_ref().unwrap().send(message).await.unwrap();
                                             }
                                             Err(err) => {
                                                 log::error!("<{name}> Error deserializing message: {:?}", err);
