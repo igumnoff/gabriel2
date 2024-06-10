@@ -84,6 +84,7 @@ pub struct ActorClient<Actor, Message, State, Response, Error> {
     _marker_error: PhantomData<Error>,
     read_half: Mutex<tokio::io::ReadHalf<TcpStream>>,
     write_half: Mutex<tokio::io::WriteHalf<TcpStream>>,
+    name: String,
 }
 
 
@@ -107,6 +108,7 @@ ActorClient<Actor, Message, State, Response, Error> {
             _marker_error: PhantomData,
             read_half: Mutex::new(read_half),
             write_half: Mutex::new(write_half),
+            name: name.clone(),
         });
 
         let handle = tokio::runtime::Handle::current();
@@ -115,15 +117,20 @@ ActorClient<Actor, Message, State, Response, Error> {
             let mut buf = vec![0; 1024];
             loop {
                 let mut stream = actor_clone.read_half.lock().await;
-
-
-
-                let n = stream.read(&mut buf).await.expect("failed to read data from socket");
-                if n == 0 {
-                    break;
+                match stream.read(&mut buf).await {
+                    Ok(n) => {
+                        if n == 0 {
+                            break;
+                        }
+                        let message = String::from_utf8_lossy(&buf[0..n]);
+                        log::info!("<{name}> Received message: {message}");
+                    }
+                    Err(err) => {
+                        log::error!("<{name}> Error reading from socket: {:?}", err);
+                        break
+                    }
                 }
-                let message = String::from_utf8_lossy(&buf[0..n]);
-                log::info!("<{name}> Received message: {message}");
+
             }
             log::info!("<{name}> Connection closed");
         });
@@ -137,9 +144,10 @@ ActorClient<Actor, Message, State, Response, Error> {
     }
 
     pub async fn send(&self, msg: Message) -> Result<(), std::io::Error> {
+        let name = &self.name;
         let mut stream = self.write_half.lock().await;
-        stream.write_all(b"ping").await?;
-
+        stream.write_all(b"send").await?;
+        log::info!("<{name}> Sent message");
         Ok(())
     }
 
