@@ -45,8 +45,17 @@ ActorServer<Actor, Message, State, Response, Error> {
                                         if n == 0 {
                                             break;
                                         }
-                                        let message:(u64, Command, Message) = deserialize(&buf[0..n]).map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err)).unwrap();
-                                        log::info!("<{name}> Received message: {message:#?}");
+                                        let message_result: Result<(u64, crate::remote::Command, Message), std::io::Error> = deserialize(&buf[0..n]).map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err));
+                                        match message_result {
+                                            Ok((id, command, message)) => {
+                                                log::info!("<{name}> Received message: {message:#?}");
+
+                                            }
+                                            Err(err) => {
+                                                log::error!("<{name}> Error deserializing message: {:?}", err);
+                                                break
+                                            }
+                                        }
                                     }
                                     Err(err) => {
                                         log::error!("<{name}> Error reading from socket: {:?}", err);
