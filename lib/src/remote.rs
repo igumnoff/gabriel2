@@ -1,6 +1,8 @@
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::sync::Arc;
+use bincode::{config, Decode, Encode};
+use bincode::error::{DecodeError, EncodeError};
 use futures::lock::Mutex;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -13,8 +15,8 @@ pub struct ActorServer<Actor, Message, State, Response, Error> {
 }
 
 
-impl<Actor: Handler<Actor, Message, State, Response, Error> + Debug + Send + Sync + 'static, Message: Debug + Send + Sync + 'static, State: Debug + Send + Sync + 'static,
-    Response: Debug + Send + Sync + 'static, Error: std::error::Error + Debug + Send + Sync + From<std::io::Error> + 'static>
+impl<Actor: Handler<Actor, Message, State, Response, Error> + Debug + Encode + Decode  + Send + Sync + 'static, Message: Debug + Encode + Decode  + Send + Sync + 'static, State: Debug + Encode + Decode  + Send + Sync + 'static,
+    Response: Debug + Encode + Decode  + Send + Sync + 'static, Error: std::error::Error + Debug + Encode + Decode  + Send + Sync + From<std::io::Error> + 'static>
 ActorServer<Actor, Message, State, Response, Error> {
     pub async fn new(name: impl AsRef<str>, host: impl AsRef<str>, port: u16, actor: Arc<ActorRef<Actor,Message, State, Response, Error>>) -> Result<Arc<Self>, Error>
     {
@@ -43,8 +45,8 @@ ActorServer<Actor, Message, State, Response, Error> {
                                         if n == 0 {
                                             break;
                                         }
-                                        let message = String::from_utf8_lossy(&buf[0..n]);
-                                        log::info!("<{name}> Received message: {message}");
+                                        let message:(u64, Command, Message) = deserialize(&buf[0..n]).map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err)).unwrap();
+                                        log::info!("<{name}> Received message: {message:#?}");
                                     }
                                     Err(err) => {
                                         log::error!("<{name}> Error reading from socket: {:?}", err);
@@ -88,8 +90,8 @@ pub struct ActorClient<Actor, Message, State, Response, Error> {
 }
 
 
-impl<Actor: Handler<Actor, Message, State, Response, Error> + Debug + Send + Sync + 'static, Message: Debug + Send + Sync + 'static, State: Debug + Send + Sync + 'static,
-    Response: Debug + Send + Sync + 'static, Error: std::error::Error + Debug + Send + Sync + From<std::io::Error> + 'static>
+impl<Actor: Handler<Actor, Message, State, Response, Error> + Debug + Encode + Decode + Send + Sync + 'static, Message: Debug + Encode + Decode + Send + Sync + 'static, State: Debug + Encode + Decode + Send + Sync + 'static,
+    Response: Debug + Encode + Decode + Send + Sync + 'static, Error: std::error::Error + Debug + Encode + Decode + Send + Sync + From<std::io::Error> + 'static>
 ActorClient<Actor, Message, State, Response, Error> {
     pub async fn new(name: impl AsRef<str>, host: impl AsRef<str>, port: u16) -> Result<Arc<Self>, Error>
     {
@@ -146,7 +148,8 @@ ActorClient<Actor, Message, State, Response, Error> {
     pub async fn send(&self, msg: Message) -> Result<(), std::io::Error> {
         let name = &self.name;
         let mut stream = self.write_half.lock().await;
-        stream.write_all(b"send").await?;
+        let data = serialize(0, Command::Send, &msg).map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
+        stream.write_all(&data[..]).await?;
         log::info!("<{name}> Sent message");
         Ok(())
     }
@@ -159,4 +162,38 @@ ActorClient<Actor, Message, State, Response, Error> {
     }
 
 
+}
+
+#[derive(Encode, Decode, PartialEq, Debug)]
+enum Command {
+    Send,
+    Ask,
+    State,
+    Stop,
+}
+
+#[derive(Encode, Decode, PartialEq, Debug)]
+struct RequestMessage {
+    id: u64,
+    command: Command,
+    payload: Vec<u8>,
+}
+
+fn serialize<T: Encode + Decode>(id: u64, command: Command, payload: &T) -> Result<Vec<u8>, EncodeError> {
+    let config = config::standard();
+    let encoded: Vec<u8> = bincode::encode_to_vec(payload, config)?;
+    let request_message = RequestMessage {
+        id,
+        command,
+        payload: encoded,
+    };
+    let request_message_encoded = bincode::encode_to_vec(&request_message, config)?;
+    Ok(request_message_encoded)
+}
+
+fn deserialize<T: Encode + Decode>(data: &[u8]) -> Result<(u64, Command, T), DecodeError> {
+    let config = config::standard();
+    let (request_message, _): (RequestMessage, _) = bincode::decode_from_slice(data, config)?;
+    let (payload, _): (T, _) = bincode::decode_from_slice(&request_message.payload, config)?;
+    Ok((request_message.id, request_message.command, payload))
 }
