@@ -187,6 +187,7 @@ ActorClient<Actor, Message, State, Response, Error> {
         // stream.write_all(&data[..]).await?;
         // log::info!("<{name}> Sent message");
         // Ok(())
+        todo!()
     }
 
     pub async fn send(&self, msg: Message) -> Result<(), std::io::Error> {
