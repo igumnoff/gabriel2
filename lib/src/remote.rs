@@ -18,7 +18,7 @@ impl<Actor: Handler<Actor, Message, State, Response, Error> + Debug + Send + Syn
 ActorServer<Actor, Message, State, Response, Error> {
     pub async fn new(name: impl AsRef<str>, host: impl AsRef<str>, port: u16, actor: Arc<ActorRef<Actor,Message, State, Response, Error>>) -> Result<Arc<Self>, Error>
     {
-
+        let name = name.as_ref().to_string();
         let address = format!("{}:{}", host.as_ref(), port);
         let listener = TcpListener::bind(address).await?;
         let handle = tokio::runtime::Handle::current();
@@ -33,37 +33,35 @@ ActorServer<Actor, Message, State, Response, Error> {
                 let accept_result = listener.accept().await;
                 match accept_result {
                     Ok((mut socket, address)) => {
+                        let name = name.clone();
                         handle.spawn(async move {
-                            log::info!("Connection opened from {address:?}");
+                            log::info!("<{name}> Connection opened from {address:?}");
                             let mut buf = vec![0; 1024];
                             loop {
-                                let n = socket
-                                    .read(&mut buf)
-                                    .await
-                                    .expect("failed to read data from socket");
-                                let message = String::from_utf8_lossy(&buf[0..n]);
-                                log::info!("Received message: {message}");
-                                if n == 0 {
-                                    return;
+                                match socket.read(&mut buf).await {
+                                    Ok(n) => {
+                                        if n == 0 {
+                                            break;
+                                        }
+                                        let message = String::from_utf8_lossy(&buf[0..n]);
+                                        log::info!("<{name}> Received message: {message}");
+                                    }
+                                    Err(err) => {
+                                        log::error!("<{name}> Error reading from socket: {:?}", err);
+                                        break
+                                    }
                                 }
-
-                                // socket
-                                //     .write_all(&buf[0..n])
-                                //     .await
-                                //     .expect("failed to write data to socket");
                             }
-                            log::info!("Connection closed from {address:?}");
+                            log::info!("<{name}> Connection closed from {address:?}");
                         });
-
                     }
                     Err(err) => {
-                        log::error!("Error accepting connection: {:?}", err);
+                        log::error!("<{name}> Error accepting connection: {:?}", err);
                         let mut failed = actor_server_clone.failed.lock().await;
                         *failed = true;
+                        break
                     }
                 }
-
-
             }
         });
 
@@ -84,7 +82,8 @@ pub struct ActorClient<Actor, Message, State, Response, Error> {
     _marker_state: PhantomData<State>,
     _marker_response: PhantomData<Response>,
     _marker_error: PhantomData<Error>,
-    tcp_stream: Mutex<TcpStream>,
+    read_half: Mutex<tokio::io::ReadHalf<TcpStream>>,
+    write_half: Mutex<tokio::io::WriteHalf<TcpStream>>,
 }
 
 
@@ -93,19 +92,42 @@ impl<Actor: Handler<Actor, Message, State, Response, Error> + Debug + Send + Syn
 ActorClient<Actor, Message, State, Response, Error> {
     pub async fn new(name: impl AsRef<str>, host: impl AsRef<str>, port: u16) -> Result<Arc<Self>, Error>
     {
+        let name = name.as_ref().to_string();
         let address = format!("{}:{}", host.as_ref(), port);
+        let stream = TcpStream::connect(address.clone()).await?;
+        log::info!("<{name}> Connected to ActorServer at {address}");
 
-        let mut stream = TcpStream::connect(address).await?;
-        println!("Connected to the server!");
+        let (read_half, write_half) = tokio::io::split(stream);
 
-        Ok(Arc::new(Self {
+        let actor = Arc::new(Self {
             _marker_actor: PhantomData,
             _marker_message: PhantomData,
             _marker_state: PhantomData,
             _marker_response: PhantomData,
             _marker_error: PhantomData,
-            tcp_stream: Mutex::new(stream),
-        }))
+            read_half: Mutex::new(read_half),
+            write_half: Mutex::new(write_half),
+        });
+
+        let handle = tokio::runtime::Handle::current();
+        let actor_clone = actor.clone();
+        let _handle_loop = handle.spawn(async move {
+            let mut buf = vec![0; 1024];
+            loop {
+                let mut stream = actor_clone.read_half.lock().await;
+
+
+
+                let n = stream.read(&mut buf).await.expect("failed to read data from socket");
+                if n == 0 {
+                    break;
+                }
+                let message = String::from_utf8_lossy(&buf[0..n]);
+                log::info!("<{name}> Received message: {message}");
+            }
+            log::info!("<{name}> Connection closed");
+        });
+        Ok(actor)
     }
 
 
@@ -115,8 +137,9 @@ ActorClient<Actor, Message, State, Response, Error> {
     }
 
     pub async fn send(&self, msg: Message) -> Result<(), std::io::Error> {
-        let mut stream = self.tcp_stream.lock().await;
+        let mut stream = self.write_half.lock().await;
         stream.write_all(b"ping").await?;
+
         Ok(())
     }
 
