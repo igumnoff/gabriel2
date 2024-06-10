@@ -46,19 +46,36 @@ ActorServer<Actor, Message, State, Response, Error> {
                                         if n == 0 {
                                             break;
                                         }
-                                        let message_result: Result<(u64, Command, Message), std::io::Error> = deserialize(&buf[0..n]).map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err));
+                                        let message_result: Result<RequestMessage, DecodeError> = deserialize_command(&buf[0..n]);
                                         match message_result {
-                                            Ok((id, command, message)) => {
-                                                log::info!("<{name}> Received message: {message:?}");
-                                                let actor_ref = actor_server_clone2.actor_ref.lock().await;
-                                                let send_result = actor_ref.as_ref().unwrap().send(message).await;
-                                                if send_result.is_err() {
-                                                    log::error!("<{name}> Error sending message: {:?}", send_result.err());
-                                                    break
+                                            Ok(request_message) => {
+                                                match request_message.command {
+                                                    Command::Send => {
+                                                        // log::info!("Payload: {:?}", request_message.payload);
+                                                        let message_result:  Result<Message, DecodeError> = deserialize(&request_message.payload[..]);
+                                                        match message_result {
+                                                            Ok(message) => {
+                                                                log::info!("<{name}> Received message: {message:?}");
+                                                                let actor_ref = actor_server_clone2.actor_ref.lock().await;
+                                                                let send_result = actor_ref.as_ref().unwrap().send(message).await;
+                                                                if send_result.is_err() {
+                                                                    log::error!("<{name}> Error sending message: {:?}", send_result.err());
+                                                                    break
+                                                                }
+                                                            }
+                                                            Err(err) => {
+                                                                log::error!("<{name}> Error deserializing message (payload): {:?}", err);
+                                                                break;
+                                                            }
+                                                        }
+                                                    }
+                                                    Command::Ask => {}
+                                                    Command::State => {}
+                                                    Command::Stop => {}
                                                 }
                                             }
                                             Err(err) => {
-                                                log::error!("<{name}> Error deserializing message: {:?}", err);
+                                                log::error!("<{name}> Error deserializing message (command): {:?}", err);
                                                 break
                                             }
                                         }
@@ -163,7 +180,8 @@ ActorClient<Actor, Message, State, Response, Error> {
     pub async fn send(&self, msg: Message) -> Result<(), std::io::Error> {
         let name = &self.name;
         let mut stream = self.write_half.lock().await;
-        let data = serialize(0, Command::Send, &msg).map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
+        let data = serialize(0, Command::Send, Some(&msg)).map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
+        // let data = serialize::<()>(0, Command::Stop, None).map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
         stream.write_all(&data[..]).await?;
         log::info!("<{name}> Sent message");
         Ok(())
@@ -194,9 +212,14 @@ struct RequestMessage {
     payload: Vec<u8>,
 }
 
-fn serialize<T: Encode + Decode>(id: u64, command: Command, payload: &T) -> Result<Vec<u8>, EncodeError> {
+fn serialize<T: Encode + Decode>(id: u64, command: Command, payload: Option<&T>) -> Result<Vec<u8>, EncodeError> {
     let config = config::standard();
-    let encoded: Vec<u8> = bincode::encode_to_vec(payload, config)?;
+    let encoded: Vec<u8> = if payload.is_some() {
+        bincode::encode_to_vec(payload.unwrap(), config)?
+    } else {
+        vec![]
+    };
+    // log::info!("Serialized: {:?}", encoded);
     let request_message = RequestMessage {
         id,
         command,
@@ -206,9 +229,15 @@ fn serialize<T: Encode + Decode>(id: u64, command: Command, payload: &T) -> Resu
     Ok(request_message_encoded)
 }
 
-fn deserialize<T: Encode + Decode>(data: &[u8]) -> Result<(u64, Command, T), DecodeError> {
+fn deserialize_command(data: &[u8]) -> Result<RequestMessage, DecodeError> {
     let config = config::standard();
     let (request_message, _): (RequestMessage, _) = bincode::decode_from_slice(data, config)?;
-    let (payload, _): (T, _) = bincode::decode_from_slice(&request_message.payload, config)?;
-    Ok((request_message.id, request_message.command, payload))
+    Ok(request_message)
+}
+
+fn deserialize<T: Encode + Decode>(data: &[u8]) -> Result<T, DecodeError> {
+    // log::info!("Deserializing: {:?}", data);
+    let config = config::standard();
+    let (payload, _): (T, _) = bincode::decode_from_slice(data, config)?;
+    Ok(payload)
 }
