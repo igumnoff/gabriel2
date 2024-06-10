@@ -118,6 +118,7 @@ pub struct ActorClient<Actor, Message, State, Response, Error> {
     _marker_error: PhantomData<Error>,
     read_half: Mutex<tokio::io::ReadHalf<TcpStream>>,
     write_half: Mutex<tokio::io::WriteHalf<TcpStream>>,
+    counter: Mutex<u64>,
     name: String,
 }
 
@@ -143,6 +144,7 @@ ActorClient<Actor, Message, State, Response, Error> {
             read_half: Mutex::new(read_half),
             write_half: Mutex::new(write_half),
             name: name.clone(),
+            counter: Mutex::new(0),
         });
 
         let handle = tokio::runtime::Handle::current();
@@ -172,16 +174,30 @@ ActorClient<Actor, Message, State, Response, Error> {
     }
 
 
-    pub async fn ask(&self, mgs: Message) -> Result<Response, Error>
+    pub async fn ask(&self, msg: Message) -> Result<Response, Error>
     {
-        todo!()
+        // let counter = {
+        //     let mut counter = self.counter.lock().await;
+        //     *counter += 1;
+        //     *counter
+        // };
+        // let name = &self.name;
+        // let mut stream = self.write_half.lock().await;
+        // let data = serialize(counter, Command::Ask, Some(&msg)).map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
+        // stream.write_all(&data[..]).await?;
+        // log::info!("<{name}> Sent message");
+        // Ok(())
     }
 
     pub async fn send(&self, msg: Message) -> Result<(), std::io::Error> {
+        let counter = {
+            let mut counter = self.counter.lock().await;
+            *counter += 1;
+            *counter
+        };
         let name = &self.name;
         let mut stream = self.write_half.lock().await;
-        let data = serialize(0, Command::Send, Some(&msg)).map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
-        // let data = serialize::<()>(0, Command::Stop, None).map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
+        let data = serialize(counter, Command::Send, Some(&msg)).map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
         stream.write_all(&data[..]).await?;
         log::info!("<{name}> Sent message");
         Ok(())
