@@ -69,7 +69,24 @@ ActorServer<Actor, Message, State, Response, Error> {
                                                             }
                                                         }
                                                     }
-                                                    Command::Ask => {}
+                                                    Command::Ask => {
+                                                        let message_result:  Result<Message, DecodeError> = deserialize(&request_message.payload[..]);
+                                                        match message_result {
+                                                            Ok(message) => {
+                                                                log::info!("<{name}> Received message: {message:?}");
+                                                                let actor_ref = actor_server_clone2.actor_ref.lock().await.clone().unwrap();
+                                                                let send_result = actor_ref.ask(message).await;
+                                                                if send_result.is_err() {
+                                                                    log::error!("<{name}> Error sending message: {:?}", send_result.err());
+                                                                    break
+                                                                }
+                                                            }
+                                                            Err(err) => {
+                                                                log::error!("<{name}> Error deserializing message (payload): {:?}", err);
+                                                                break;
+                                                            }
+                                                        }
+                                                    }
                                                     Command::State => {}
                                                     Command::Stop => {}
                                                 }
