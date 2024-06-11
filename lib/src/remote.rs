@@ -49,13 +49,13 @@ ActorServer<Actor, Message, State, Response, Error> {
                                         if n == 0 {
                                             break;
                                         }
-                                        let message_result: Result<RequestMessage, DecodeError> = deserialize_command(&buf[0..n]);
+                                        let message_result: Result<RequestMessage, DecodeError> = request_deserialize_command(&buf[0..n]);
                                         match message_result {
                                             Ok(request_message) => {
                                                 match request_message.command {
-                                                    Command::Send => {
+                                                    RequestCommand::Send => {
                                                         // log::info!("Payload: {:?}", request_message.payload);
-                                                        let message_result:  Result<Message, DecodeError> = deserialize(&request_message.payload[..]);
+                                                        let message_result:  Result<Message, DecodeError> = request_deserialize(&request_message.payload[..]);
                                                         match message_result {
                                                             Ok(message) => {
                                                                 log::info!("<{name}> Received message: {message:?}");
@@ -72,8 +72,8 @@ ActorServer<Actor, Message, State, Response, Error> {
                                                             }
                                                         }
                                                     }
-                                                    Command::Ask => {
-                                                        let message_result:  Result<Message, DecodeError> = deserialize(&request_message.payload[..]);
+                                                    RequestCommand::Ask => {
+                                                        let message_result:  Result<Message, DecodeError> = request_deserialize(&request_message.payload[..]);
                                                         match message_result {
                                                             Ok(message) => {
                                                                 log::info!("<{name}> Received message: {message:?}");
@@ -90,8 +90,8 @@ ActorServer<Actor, Message, State, Response, Error> {
                                                             }
                                                         }
                                                     }
-                                                    Command::State => {}
-                                                    Command::Stop => {}
+                                                    RequestCommand::State => {}
+                                                    RequestCommand::Stop => {}
                                                 }
                                             }
                                             Err(err) => {
@@ -208,7 +208,7 @@ ActorClient<Actor, Message, State, Response, Error> {
             };
             let name = &self.name;
             let mut stream = self.write_half.lock().await;
-            let data = serialize(counter, Command::Ask, Some(&msg)).map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
+            let data = request_serialize(counter, RequestCommand::Ask, Some(&msg)).map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
             stream.write_all(&data[..]).await?;
             log::info!("<{name}> Sent message");
             self.promise.lock().await.insert(counter, sender);
@@ -230,7 +230,7 @@ ActorClient<Actor, Message, State, Response, Error> {
         };
         let name = &self.name;
         let mut stream = self.write_half.lock().await;
-        let data = serialize(counter, Command::Send, Some(&msg)).map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
+        let data = request_serialize(counter, RequestCommand::Send, Some(&msg)).map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
         stream.write_all(&data[..]).await?;
         log::info!("<{name}> Sent message");
         Ok(())
@@ -247,7 +247,7 @@ ActorClient<Actor, Message, State, Response, Error> {
 }
 
 #[derive(Encode, Decode, PartialEq, Debug)]
-enum Command {
+enum RequestCommand {
     Send,
     Ask,
     State,
@@ -257,11 +257,11 @@ enum Command {
 #[derive(Encode, Decode, PartialEq, Debug)]
 struct RequestMessage {
     id: u64,
-    command: Command,
+    command: RequestCommand,
     payload: Vec<u8>,
 }
 
-fn serialize<T: Encode + Decode>(id: u64, command: Command, payload: Option<&T>) -> Result<Vec<u8>, EncodeError> {
+fn request_serialize<T: Encode + Decode>(id: u64, command: RequestCommand, payload: Option<&T>) -> Result<Vec<u8>, EncodeError> {
     let config = config::standard();
     let encoded: Vec<u8> = if payload.is_some() {
         bincode::encode_to_vec(payload.unwrap(), config)?
@@ -278,15 +278,52 @@ fn serialize<T: Encode + Decode>(id: u64, command: Command, payload: Option<&T>)
     Ok(request_message_encoded)
 }
 
-fn deserialize_command(data: &[u8]) -> Result<RequestMessage, DecodeError> {
+fn request_deserialize_command(data: &[u8]) -> Result<RequestMessage, DecodeError> {
     let config = config::standard();
     let (request_message, _): (RequestMessage, _) = bincode::decode_from_slice(data, config)?;
     Ok(request_message)
 }
 
-fn deserialize<T: Encode + Decode>(data: &[u8]) -> Result<T, DecodeError> {
+fn request_deserialize<T: Encode + Decode>(data: &[u8]) -> Result<T, DecodeError> {
     // log::info!("Deserializing: {:?}", data);
     let config = config::standard();
     let (payload, _): (T, _) = bincode::decode_from_slice(data, config)?;
     Ok(payload)
+}
+
+#[derive(Encode, Decode, PartialEq, Debug)]
+struct ResponseMessage {
+    id: u64,
+    command: ResponseCommand,
+    payload: Vec<u8>,
+}
+
+#[derive(Encode, Decode, PartialEq, Debug)]
+enum ResponseCommand {
+    Ask,
+}
+
+#[derive(Encode, Decode, PartialEq, Debug)]
+enum ResponsePayload<R,E> {
+    Ok(R),
+    Err(E),
+}
+
+fn response_serialize<Response: Encode + Decode, Error: Encode + Decode>(id: u64, command: ResponseCommand, payload: ResponsePayload<Response, Error>) -> Result<Vec<u8>, EncodeError> {
+    let config = config::standard();
+    let encoded: Vec<u8> = bincode::encode_to_vec(payload, config)?;
+    let response_message = ResponseMessage {
+        id,
+        command,
+        payload: encoded,
+    };
+    let response_message_encoded = bincode::encode_to_vec(&response_message, config)?;
+    Ok(response_message_encoded)
+}
+
+fn response_deserialize<Response: Encode + Decode, Error: Encode + Decode>(data: &[u8]) -> Result<(u64, ResponseCommand, ResponsePayload<Response, Error>), DecodeError> {
+    let config = config::standard();
+    let (response_message, _): (ResponseMessage, _) = bincode::decode_from_slice(data, config)?;
+    let payload: ResponsePayload<Response, Error> = bincode::decode(&response_message.payload[..])?;
+    Ok((response_message.id, response_message.command, payload))
 }
