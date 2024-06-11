@@ -129,22 +129,15 @@ mod tests {
         let echo_server = ActorServer::new("echo_server", "127.0.0.1", 9001, echo_ref).await?;
         let echo_client: Arc<ActorClient<Echo, Message, State, Response, EchoError >> = ActorClient::new("echo_client", "127.0.0.1", 9001).await?;
 
-        // let pong = echo_client.ask(Message::Ping).await?;
-        // log::info!("Ask");
-        // let pong = echo_client.ask(Message::Ping).await?;
-        // log::info!("Ask");
         let pong = echo_client.ask(Message::Ping).await?;
         log::info!("Ask");
-        // sleep 1 sec
         echo_client.send(Message::Ping).await?;
         log::info!("Ping");
-        tokio::time::sleep(Duration::from_millis(1000)).await;
-        // echo_client.send(Message::Ping).await?;
-        // log::info!("Ping");
+        echo_client.send(Message::Ping).await?;
+        log::info!("Ping");
+        // sleep 1 second
+        tokio::time::sleep(Duration::from_secs(1)).await;
 
-
-        // sleep 1 src
-        tokio::time::sleep(Duration::from_millis(1000)).await;
         // _ = echo_client.stop().await;
         // _ = echo_server.stop().await;
         Ok(())

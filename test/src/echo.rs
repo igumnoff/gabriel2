@@ -31,7 +31,7 @@ pub enum EchoError {
 }
 
 impl From<std::io::Error> for EchoError {
-    fn from(err: std::io::Error) -> Self {
+    fn from(_err: std::io::Error) -> Self {
         EchoError::Unknown
     }
 }
