@@ -189,7 +189,6 @@ ActorClient<Actor, Message, State, Response, Error> {
         let _handle_loop = handle.spawn(async move {
             let mut buf = vec![0; 1024];
             loop {
-                let mut promise = actor_clone.promise.lock().await;
                 let mut stream = actor_clone.read_half.lock().await;
                 match stream.read(&mut buf).await {
                     Ok(n) => {
@@ -200,6 +199,7 @@ ActorClient<Actor, Message, State, Response, Error> {
                         log::info!("<{name}> Received message: {response_command:?}");
                         match response_command {
                             ResponseCommand::Ask => {
+                                let mut promise = actor_clone.promise.lock().await;
                                 let sender = promise.remove(&id).unwrap();
                                 match response_payload {
                                     ResponsePayload::Ok(response) => {
