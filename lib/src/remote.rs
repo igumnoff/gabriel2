@@ -7,6 +7,7 @@ use bincode::error::{DecodeError, EncodeError};
 use futures::lock::Mutex;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::sync::oneshot;
 use tokio::sync::oneshot::Sender;
 use crate::{ActorRef, Handler};
 
@@ -197,18 +198,28 @@ ActorClient<Actor, Message, State, Response, Error> {
 
     pub async fn ask(&self, msg: Message) -> Result<Response, Error>
     {
-        // let counter = {
-        //     let mut counter = self.counter.lock().await;
-        //     *counter += 1;
-        //     *counter
-        // };
-        // let name = &self.name;
-        // let mut stream = self.write_half.lock().await;
-        // let data = serialize(counter, Command::Ask, Some(&msg)).map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
-        // stream.write_all(&data[..]).await?;
-        // log::info!("<{name}> Sent message");
-        // Ok(())
-        todo!()
+        let (sender, receiver) = oneshot::channel();
+        {
+
+            let counter = {
+                let mut counter = self.counter.lock().await;
+                *counter += 1;
+                *counter
+            };
+            let name = &self.name;
+            let mut stream = self.write_half.lock().await;
+            let data = serialize(counter, Command::Ask, Some(&msg)).map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
+            stream.write_all(&data[..]).await?;
+            log::info!("<{name}> Sent message");
+            self.promise.lock().await.insert(counter, sender);
+        }
+        let r = receiver.await;
+        match r {
+            Ok(res) => { res }
+            Err(_) => {
+                return Err(std::io::Error::new(std::io::ErrorKind::Other, "Err").into());
+            }
+        }
     }
 
     pub async fn send(&self, msg: Message) -> Result<(), std::io::Error> {

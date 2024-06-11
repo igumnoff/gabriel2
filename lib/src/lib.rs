@@ -255,14 +255,20 @@ impl<Actor: Handler<Actor, Message, State, Response, Error> + Debug + Send + Syn
     /// is closed without sending a response, the method returns an error.
     ///
     /// # Parameters
-    /// - `mgs`: The message to send to the actor.
+    /// - `msg`: The message to send to the actor.
     ///
     /// # Returns
     /// - `Result<Response, Error>`: The response from the actor, or an error if the actor failed
     ///   to process the message or if the `tx` field is `None`.
-    pub async fn ask(&self, mgs: Message) -> Result<Response, Error>
+    pub async fn ask(&self, msg: Message) -> Result<Response, Error>
     {
-        log::debug!("<{}> Result message: {:?}", self.name, mgs);
+        log::debug!("<{}> Result message: {:?}", self.name, msg);
+
+        let counter = {
+            let mut counter = self.message_id.lock().await;
+            *counter += 1;
+            *counter
+        };
         let tx_lock = self.tx.lock().await;
         let tx = tx_lock.as_ref();
         match tx {
@@ -272,9 +278,8 @@ impl<Actor: Handler<Actor, Message, State, Response, Error> + Debug + Send + Syn
             Some(tx) => {
                 let (sender, receiver) = oneshot::channel();
                 {
-                    *self.message_id.lock().await += 1;
-                    self.promise.lock().await.insert(*self.message_id.lock().await, sender);
-                    let r = tx.send((mgs, *self.message_id.lock().await)).await;
+                    self.promise.lock().await.insert(counter, sender);
+                    let r = tx.send((msg, counter)).await;
                     if r.is_err() {
                         return Err(std::io::Error::new(std::io::ErrorKind::Other, "Err").into());
                     }
