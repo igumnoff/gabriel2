@@ -42,12 +42,14 @@ ActorServer<Actor, Message, State, Response, Error> {
                         let write_half_arc = Arc::new(Mutex::new(write_half));
                         let name = name.clone();
                         let actor_server_clone2 = actor_server_clone.clone();
-                        handle.spawn(async move {
+                        let join_handler = handle.spawn(async move {
                             log::info!("<{name}> Connection opened from {address:?}");
                             let mut buf = vec![0; 1024];
                             loop {
+                                log::info!("Loop");
                                 match read_half.read(&mut buf).await {
                                     Ok(n) => {
+                                        log::info!("read");
                                         if n == 0 {
                                             break;
                                         }
@@ -117,6 +119,7 @@ ActorServer<Actor, Message, State, Response, Error> {
                                         break
                                     }
                                 }
+                                log::info!("End loop");
                             }
                             log::info!("<{name}> Connection closed from {address:?}");
                         });
@@ -186,14 +189,28 @@ ActorClient<Actor, Message, State, Response, Error> {
         let _handle_loop = handle.spawn(async move {
             let mut buf = vec![0; 1024];
             loop {
+                let mut promise = actor_clone.promise.lock().await;
                 let mut stream = actor_clone.read_half.lock().await;
                 match stream.read(&mut buf).await {
                     Ok(n) => {
                         if n == 0 {
                             break;
                         }
-                        let message = String::from_utf8_lossy(&buf[0..n]);
-                        log::info!("<{name}> Received message: {message}");
+                        let (id, response_command, response_payload) = response_deserialize::<Response, Error>(&buf[0..n]).unwrap();
+                        log::info!("<{name}> Received message: {response_command:?}");
+                        match response_command {
+                            ResponseCommand::Ask => {
+                                let sender = promise.remove(&id).unwrap();
+                                match response_payload {
+                                    ResponsePayload::Ok(response) => {
+                                        sender.send(Ok(response)).unwrap();
+                                    }
+                                    ResponsePayload::Err(err) => {
+                                        sender.send(Err(err)).unwrap();
+                                    }
+                                }
+                            }
+                        }
                     }
                     Err(err) => {
                         log::error!("<{name}> Error reading from socket: {:?}", err);
