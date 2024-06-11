@@ -37,14 +37,16 @@ ActorServer<Actor, Message, State, Response, Error> {
             loop {
                 let accept_result = listener.accept().await;
                 match accept_result {
-                    Ok((mut socket, address)) => {
+                    Ok((mut socket_mut, address)) => {
+                        let (mut read_half,write_half) = tokio::io::split(socket_mut);
+                        let write_half_arc = Arc::new(Mutex::new(write_half));
                         let name = name.clone();
                         let actor_server_clone2 = actor_server_clone.clone();
                         handle.spawn(async move {
                             log::info!("<{name}> Connection opened from {address:?}");
                             let mut buf = vec![0; 1024];
                             loop {
-                                match socket.read(&mut buf).await {
+                                match read_half.read(&mut buf).await {
                                     Ok(n) => {
                                         if n == 0 {
                                             break;
@@ -58,7 +60,6 @@ ActorServer<Actor, Message, State, Response, Error> {
                                                         let message_result:  Result<Message, DecodeError> = request_deserialize(&request_message.payload[..]);
                                                         match message_result {
                                                             Ok(message) => {
-                                                                log::info!("<{name}> Received message: {message:?}");
                                                                 let actor_ref = actor_server_clone2.actor_ref.lock().await;
                                                                 let send_result = actor_ref.as_ref().unwrap().send(message).await;
                                                                 if send_result.is_err() {
@@ -76,13 +77,24 @@ ActorServer<Actor, Message, State, Response, Error> {
                                                         let message_result:  Result<Message, DecodeError> = request_deserialize(&request_message.payload[..]);
                                                         match message_result {
                                                             Ok(message) => {
-                                                                log::info!("<{name}> Received message: {message:?}");
+                                                                log::info!("<{name}> Received (ask) message: {message:?}");
                                                                 let actor_ref = actor_server_clone2.actor_ref.lock().await.clone().unwrap();
-                                                                let send_result = actor_ref.ask(message).await;
-                                                                if send_result.is_err() {
-                                                                    log::error!("<{name}> Error sending message: {:?}", send_result.err());
-                                                                    break
-                                                                }
+                                                                let handel = tokio::runtime::Handle::current();
+                                                                let write_half_clone = write_half_arc.clone();
+                                                                handel.spawn(async move {
+                                                                    let response = actor_ref.ask(message).await;
+                                                                    let response_payload = match response {
+                                                                        Ok(response) => ResponsePayload::Ok(response),
+                                                                        Err(err) => ResponsePayload::Err(err),
+                                                                    };
+                                                                    // todo remove unwrap
+                                                                    let response_data = response_serialize(request_message.id, ResponseCommand::Ask, response_payload).unwrap();
+
+
+                                                                    let mut write_half = write_half_clone.lock().await;
+                                                                    // todo remove unwrap
+                                                                    write_half.write_all(&response_data[..]).await.unwrap();
+                                                                });
                                                             }
                                                             Err(err) => {
                                                                 log::error!("<{name}> Error deserializing message (payload): {:?}", err);
@@ -207,10 +219,12 @@ ActorClient<Actor, Message, State, Response, Error> {
                 *counter
             };
             let name = &self.name;
-            let mut stream = self.write_half.lock().await;
-            let data = request_serialize(counter, RequestCommand::Ask, Some(&msg)).map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
-            stream.write_all(&data[..]).await?;
-            log::info!("<{name}> Sent message");
+            {
+                let mut stream = self.write_half.lock().await;
+                let data = request_serialize(counter, RequestCommand::Ask, Some(&msg)).map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
+                stream.write_all(&data[..]).await?;
+            }
+            log::info!("<{name}> Ask message");
             self.promise.lock().await.insert(counter, sender);
         }
         let r = receiver.await;
@@ -229,9 +243,11 @@ ActorClient<Actor, Message, State, Response, Error> {
             *counter
         };
         let name = &self.name;
-        let mut stream = self.write_half.lock().await;
-        let data = request_serialize(counter, RequestCommand::Send, Some(&msg)).map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
-        stream.write_all(&data[..]).await?;
+        {
+            let mut stream = self.write_half.lock().await;
+            let data = request_serialize(counter, RequestCommand::Send, Some(&msg)).map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
+            stream.write_all(&data[..]).await?;
+        }
         log::info!("<{name}> Sent message");
         Ok(())
     }
