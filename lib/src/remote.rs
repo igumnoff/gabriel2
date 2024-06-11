@@ -324,6 +324,6 @@ fn response_serialize<Response: Encode + Decode, Error: Encode + Decode>(id: u64
 fn response_deserialize<Response: Encode + Decode, Error: Encode + Decode>(data: &[u8]) -> Result<(u64, ResponseCommand, ResponsePayload<Response, Error>), DecodeError> {
     let config = config::standard();
     let (response_message, _): (ResponseMessage, _) = bincode::decode_from_slice(data, config)?;
-    let (payload, _): (ResponsePayload<Response, Error>, _) = bincode::decode_from_slice(&response_message.payload[..])?;
+    let (payload, _): (ResponsePayload<Response, Error>, _) = bincode::decode_from_slice(&response_message.payload[..],config)?;
     Ok((response_message.id, response_message.command, payload))
 }
