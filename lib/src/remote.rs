@@ -46,10 +46,10 @@ ActorServer<Actor, Message, State, Response, Error> {
                             log::info!("<{name}> Connection opened from {address:?}");
                             let mut buf = vec![0; 1024];
                             loop {
-                                log::info!("Loop");
+                                // log::info!("Loop");
                                 match read_half.read(&mut buf).await {
                                     Ok(n) => {
-                                        log::info!("read");
+                                        // log::info!("read {n}");
                                         if n == 0 {
                                             break;
                                         }
@@ -62,6 +62,7 @@ ActorServer<Actor, Message, State, Response, Error> {
                                                         let message_result:  Result<Message, DecodeError> = request_deserialize(&request_message.payload[..]);
                                                         match message_result {
                                                             Ok(message) => {
+                                                                log::info!("<{name}> Received (send) message: {message:?}");
                                                                 let actor_ref = actor_server_clone2.actor_ref.lock().await;
                                                                 let send_result = actor_ref.as_ref().unwrap().send(message).await;
                                                                 if send_result.is_err() {
@@ -89,12 +90,12 @@ ActorServer<Actor, Message, State, Response, Error> {
                                                                         Ok(response) => ResponsePayload::Ok(response),
                                                                         Err(err) => ResponsePayload::Err(err),
                                                                     };
-                                                                    // todo remove unwrap
+                                                                    // todo replace unwrap
                                                                     let response_data = response_serialize(request_message.id, ResponseCommand::Ask, response_payload).unwrap();
 
 
                                                                     let mut write_half = write_half_clone.lock().await;
-                                                                    // todo remove unwrap
+                                                                    // todo replace unwrap
                                                                     write_half.write_all(&response_data[..]).await.unwrap();
                                                                 });
                                                             }
@@ -113,13 +114,14 @@ ActorServer<Actor, Message, State, Response, Error> {
                                                 break
                                             }
                                         }
+                                        // log::info!("read end");
                                     }
                                     Err(err) => {
                                         log::error!("<{name}> Error reading from socket: {:?}", err);
                                         break
                                     }
                                 }
-                                log::info!("End loop");
+                                // log::info!("End loop");
                             }
                             log::info!("<{name}> Connection closed from {address:?}");
                         });
