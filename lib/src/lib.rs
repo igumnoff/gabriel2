@@ -60,7 +60,7 @@ pub struct ActorRef<Actor, Message, State, Response, Error> {
 
 impl<Actor, Message, State, Response, Error>  Drop for ActorRef<Actor, Message, State, Response, Error>  {
     fn drop(&mut self) {
-        log::debug!("Drop actor: {}", self.name);
+        log::trace!("Drop actor: {}", self.name);
     }
 }
 
@@ -140,7 +140,7 @@ impl<Actor: Handler<Actor, Message, State, Response, Error> + Debug + Send + Syn
     /// - `State`: The type of the state of the actor. This type must be `Debug`, `Send`, and `Sync`.
     /// - `Response`: The type of the response that the actor produces after processing a message. This type must be `Debug`, `Send`, and `Sync`.
     /// - `Error`: The type of the error that the actor can produce. This type must implement the `std::error::Error` trait and be `Debug`, `Send`, `Sync`, and `From<std::io::Error>`.
-    pub async fn new(name: String, actor: Actor, state: State, buffer: usize) -> Result<Arc<Self>, Error>
+    pub async fn new(name: impl AsRef<str>, actor: Actor, state: State, buffer: usize) -> Result<Arc<Self>, Error>
     {
         let state_arc = Arc::new(Mutex::new(state));
         let state_clone = state_arc.clone();
@@ -154,7 +154,7 @@ impl<Actor: Handler<Actor, Message, State, Response, Error> + Debug + Send + Syn
             self_ref: Mutex::new(None),
             message_id: Mutex::new(0),
             promise: Mutex::new(HashMap::new()),
-            name: name,
+            name: name.as_ref().to_string(),
             actor: Mutex::new(Some(actor_arc.clone())),
             running: Mutex::new(false),
         };
@@ -400,7 +400,7 @@ impl<Actor: Handler<Actor, Message, State, Response, Error> + Debug + Send + Syn
             None => {}
             Some(join_handle) => {
                 let _ = join_handle.abort();
-                log::debug!("join_handle abort()");
+                log::trace!("join_handle abort()");
             }
         }
         *self.join_handle.lock().await = None;

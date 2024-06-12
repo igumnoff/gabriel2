@@ -56,7 +56,6 @@ ActorServer<Actor, Message, State, Response, Error> {
                                         }
                                         match read_half.read_exact(&mut buf).await {
                                             Ok(n) => {
-                                                // log::info!("read {n}");
                                                 if n == 0 {
                                                     break;
                                                 }
@@ -65,11 +64,10 @@ ActorServer<Actor, Message, State, Response, Error> {
                                                     Ok(request_message) => {
                                                         match request_message.command {
                                                             RequestCommand::Send => {
-                                                                // log::info!("Payload: {:?}", request_message.payload);
                                                                 let message_result:  Result<Message, DecodeError> = request_deserialize(&request_message.payload[..]);
                                                                 match message_result {
                                                                     Ok(message) => {
-                                                                        log::info!("<{name}> Received (send) message: {message:?}");
+                                                                        log::trace!("<{name}> Received (send) message: {message:?}");
                                                                         let actor_ref = actor_server_clone2.actor_ref.lock().await;
                                                                         let send_result = actor_ref.as_ref().unwrap().send(message).await;
                                                                         if send_result.is_err() {
@@ -87,7 +85,7 @@ ActorServer<Actor, Message, State, Response, Error> {
                                                                 let message_result:  Result<Message, DecodeError> = request_deserialize(&request_message.payload[..]);
                                                                 match message_result {
                                                                     Ok(message) => {
-                                                                        log::info!("<{name}> Received (ask) message: {message:?}");
+                                                                        log::debug!("<{name}> Received (ask) message: {message:?}");
                                                                         let actor_ref = actor_server_clone2.actor_ref.lock().await.clone().unwrap();
                                                                         let handel = tokio::runtime::Handle::current();
                                                                         let write_half_clone = write_half_arc.clone();
@@ -126,14 +124,14 @@ ActorServer<Actor, Message, State, Response, Error> {
                                                 // log::info!("read end");
                                             }
                                             Err(err) => {
-                                                log::error!("<{name}> Error reading from socket: {:?}", err);
+                                                log::trace!("<{name}> Error reading from socket: {:?}", err);
                                                 break
                                             }
                                         }
                                     }
 
                                     Err(err) => {
-                                        log::error!("<{name}> Error reading from socket: {:?}", err);
+                                        log::trace!("<{name}> Error reading from socket: {:?}", err);
                                         break
                                     }
                                 }
@@ -157,7 +155,11 @@ ActorServer<Actor, Message, State, Response, Error> {
         Ok(actor_server.clone())
     }
     pub async fn stop(&self) -> Result<(), Error> {
-        todo!()
+        if let Some(actor_ref) = self.actor_ref.lock().await.as_ref() {
+            actor_ref.stop().await?;
+        }
+        *self.actor_ref.lock().await = None;
+        Ok(())
     }
 }
 
@@ -185,7 +187,7 @@ ActorClient<Actor, Message, State, Response, Error> {
         let name = name.as_ref().to_string();
         let address = format!("{}:{}", host.as_ref(), port);
         let stream = TcpStream::connect(address.clone()).await?;
-        log::info!("<{name}> Connected to ActorServer at {address}");
+        log::info!("<{name}> Bind at {address}");
 
         let (read_half, write_half) = tokio::io::split(stream);
 
@@ -223,7 +225,7 @@ ActorClient<Actor, Message, State, Response, Error> {
                                     break;
                                 }
                                 let (id, response_command, response_payload) = response_deserialize::<Response, Error>(&buf[0..n]).unwrap();
-                                log::info!("<{name}> Received message: {response_command:?}");
+                                log::debug!("<{name}> Received message: {response_command:?}");
                                 match response_command {
                                     ResponseCommand::Ask => {
                                         let mut promise = actor_clone.promise.lock().await;
@@ -240,14 +242,14 @@ ActorClient<Actor, Message, State, Response, Error> {
                                 }
                             }
                             Err(err) => {
-                                log::error!("<{name}> Error reading from socket: {:?}", err);
+                                log::trace!("<{name}> Error reading from socket: {:?}", err);
                                 break
                             }
                         }
 
                     }
                     Err(err) => {
-                        log::error!("<{name}> Error reading from socket: {:?}", err);
+                        log::trace!("<{name}> Error reading from socket: {:?}", err);
                         break
                     }
                 }
@@ -278,7 +280,7 @@ ActorClient<Actor, Message, State, Response, Error> {
                 stream.write_all(&data_len_vec[..]).await?;
                 stream.write_all(&data[..]).await?;
             }
-            log::info!("<{name}> Ask message");
+            log::debug!("<{name}> Ask message");
             self.promise.lock().await.insert(counter, sender);
         }
         let r = receiver.await;
@@ -304,7 +306,7 @@ ActorClient<Actor, Message, State, Response, Error> {
             stream.write_all(&data_len_vec[..]).await?;
             stream.write_all(&data[..]).await?;
         }
-        log::info!("<{name}> Sent message");
+        log::debug!("<{name}> Sent message");
         Ok(())
     }
 
@@ -312,7 +314,10 @@ ActorClient<Actor, Message, State, Response, Error> {
         todo!()
     }
     pub async fn stop(&self) -> Result<(), Error> {
-        todo!()
+        self.promise.lock().await.clear();
+        self.write_half.lock().await.shutdown().await?;
+        log::debug!("<{}> Stop worker", self.name);
+        Ok(())
     }
 
 
@@ -340,7 +345,6 @@ fn request_serialize<T: Encode + Decode>(id: u64, command: RequestCommand, paylo
     } else {
         vec![]
     };
-    // log::info!("Serialized: {:?}", encoded);
     let request_message = RequestMessage {
         id,
         command,
@@ -357,7 +361,6 @@ fn request_deserialize_command(data: &[u8]) -> Result<RequestMessage, DecodeErro
 }
 
 fn request_deserialize<T: Encode + Decode>(data: &[u8]) -> Result<T, DecodeError> {
-    // log::info!("Deserializing: {:?}", data);
     let config = config::standard();
     let (payload, _): (T, _) = bincode::decode_from_slice(data, config)?;
     Ok(payload)
