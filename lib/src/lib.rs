@@ -2,8 +2,8 @@
 // #![doc = include_str!("../README.md")]
 //!
 
-#[cfg(feature = "remote")]
-pub mod remote;
+// #[cfg(feature = "remote")]
+// pub mod remote;
 
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -100,22 +100,51 @@ pub struct Context<Actor, Message, State, Response, Error> {
 /// - `receive`: This method is called when the actor receives a message. It takes a context, which contains the message and the state of the actor, and returns a `Future` that resolves to a `Result` containing either the response produced by the actor after processing the message, or an error.
 /// - `pre_start`: This method is called before the actor starts. It takes the state of the actor and a reference to the actor itself, and returns a `Future` that resolves to a `Result`. If the `Result` is `Ok`, the actor starts; if it is `Err`, the actor does not start. By default, this method returns `Ok(())`.
 /// - `pre_stop`: This method is called before the actor stops. It takes the state of the actor and a reference to the actor itself, and returns a `Future` that resolves to a `Result`. If the `Result` is `Ok`, the actor stops; if it is `Err`, the actor does not stop. By default, this method returns `Ok(())`.
-pub trait Handler<Actor: Sync + Send + 'static, Message: Sync + Send + 'static, State: Sync + Send + 'static, Response: Sync + Send + 'static, Error: Sync + Send + 'static> {
-    fn receive(&self, ctx: Arc<Context<Actor, Message, State, Response, Error>>) -> impl Future<Output = Result<Response, Error>> + Send;
-    fn pre_start(&self, _state: Arc<Mutex<State>>, _self_ref: Arc<ActorRef<Actor, Message, State, Response, Error>>) -> impl Future<Output = Result<(), Error>> + Send {
+pub trait Handler {
+    type Actor: Sync + Send + Debug + 'static;
+    type Message: Sync + Send + Debug + 'static;
+    type State: Sync + Send + Debug + 'static;
+    type Response: Sync + Send + Debug + 'static;
+    type Error: Sync + Send + Debug + std::error::Error + From<std::io::Error>+ 'static;
+
+    fn receive(&self, ctx: Arc<Context<Self::Actor, Self::Message, Self::State, Self::Response, Self::Error>>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send ;
+    fn pre_start(&self, _state: Arc<Mutex<Self::State>>, _self_ref: Arc<ActorRef<Self::Actor, Self::Message, Self::State, Self::Response, Self::Error>>) -> impl Future<Output = Result<(), Self::Error>> {
         async {
             Ok(())
         }
     }
-    fn pre_stop(&self, _state: Arc<Mutex<State>>, _self_ref: Arc<ActorRef<Actor, Message, State, Response, Error>>) -> impl Future<Output = Result<(), Error>> + Send {
+    fn pre_stop(&self, _state: Arc<Mutex<Self::State>>, _self_ref: Arc<ActorRef<Self::Actor, Self::Message, Self::State, Self::Response, Self::Error>>) -> impl Future<Output = Result<(), Self::Error>> {
         async {
             Ok(())
         }
     }
 }
 
-impl<Actor: Handler<Actor, Message, State, Response, Error> + Debug + Send + Sync + 'static, Message: Debug + Send + Sync + 'static, State: Debug + Send + Sync + 'static,
-    Response: Debug + Send + Sync + 'static, Error: std::error::Error + Debug + Send + Sync + From<std::io::Error> + 'static> ActorRef<Actor, Message, State, Response, Error> {
+pub trait ActorRefTrait {
+    type Actor:  Handler + Sync + Send + Debug + 'static;
+    type Message: Sync + Send + Debug + 'static;
+    type State: Sync + Send + Debug + 'static;
+    type Response: Sync + Send + Debug + 'static;
+    type Error: Sync + Send + Debug + std::error::Error + From<std::io::Error>+ 'static;
+
+    fn new(name: impl AsRef<str>, actor: Self::Actor, state: Self::State, buffer: usize) -> impl Future<Output = Result<Arc<Self>, Self::Error>>;
+    fn ask(&self, msg: Self::Message) -> impl Future<Output = Result<Self::Response, Self::Error>>;
+    fn send(&self, msg: Self::Message) -> impl Future<Output = Result<(), std::io::Error>>;
+    fn state(&self) -> impl Future<Output = Result<Arc<Mutex<Self::State>>, std::io::Error>>;
+    fn stop(&self) ->impl Future<Output = Result<(), Self::Error>>;
+
+}
+
+// <Actor: Handler + Debug + Send + Sync + 'static, Message: Debug + Send + Sync + 'static, State: Debug + Send + Sync + 'static,
+//     Response: Debug + Send + Sync + 'static, Error: std::error::Error + Debug + Send + Sync + From<std::io::Error> + 'static>
+impl <Actor: Handler<Actor = Actor, State = State, Message = Message, Error = Error, Response = Response> + Sync + Send + Debug + 'static , Message: Sync + Send + Debug + 'static,
+    State:  Sync + Send + Debug + 'static, Response:  Sync + Send + Debug + 'static,
+    Error: Sync + Send + Debug + std::error::Error + From<std::io::Error>+ 'static>  ActorRefTrait for ActorRef<Actor, Message, State, Response, Error> {
+    type Actor = Actor;
+    type Message = Message;
+    type State = State;
+    type Response = Response;
+    type Error = Error;
 
     /// Creates a new `ActorRef` instance.
     ///
@@ -143,7 +172,7 @@ impl<Actor: Handler<Actor, Message, State, Response, Error> + Debug + Send + Syn
     /// - `State`: The type of the state of the actor. This type must be `Debug`, `Send`, and `Sync`.
     /// - `Response`: The type of the response that the actor produces after processing a message. This type must be `Debug`, `Send`, and `Sync`.
     /// - `Error`: The type of the error that the actor can produce. This type must implement the `std::error::Error` trait and be `Debug`, `Send`, `Sync`, and `From<std::io::Error>`.
-    pub async fn new(name: impl AsRef<str>, actor: Actor, state: State, buffer: usize) -> Result<Arc<Self>, Error>
+    async fn new(name: impl AsRef<str>, actor: Self::Actor, state: Self::State, buffer: usize) ->  Result<Arc<Self>, Self::Error>
     {
         let state_arc = Arc::new(Mutex::new(state));
         let state_clone = state_arc.clone();
@@ -174,62 +203,55 @@ impl<Actor: Handler<Actor, Message, State, Response, Error> + Debug + Send + Syn
 
             loop {
                 tokio::select! {
-                _ = futures::future::pending::<()>() => {
+            _ = futures::future::pending::<()>() => {
 
-                },
-                msg_opt = rx.recv() => {
+            },
+            msg_opt = rx.recv() => {
+                match msg_opt {
+                    None => {
+                        log::debug!("<{}> No message", me.name);
+                        break;
+                    }
+                    Some(message) => {
+                                if *ret_clone3.running.lock().await == false {
+                                    return ();
+                                }
+                                let msg = message.0;
+                                let message_id = message.1;
+                                let state_clone = state_arc.clone();
+                                log::debug!("<{}> Got message: {:?} Current state: {:?}", me.name, msg, state_clone.lock().await);
+                                let msg_debug = format!("{:?}", msg);
+                                let state = state_arc.clone();
+                                let context = Context {
+                                    mgs: msg,
+                                    state: state,
+                                    self_ref: me.clone(),
+                                };
 
-                        match msg_opt {
-                            None => {
-                                log::debug!("<{}> No message", me.name);
-                                break;
-                            }
-                            Some(message) => {
-                                    if *ret_clone3.running.lock().await == false {
-                                        return ();
+                                let r = actor.receive(Arc::new(context));
+                                {
+                                    let result = r.await;
+                                    log::trace!("<{}> Work result: {:?}", me.name, result);
+                                    if result.is_err() {
+                                        log::error!("<{}> Work error: {:?} on message {}", me.name, result, msg_debug);
                                     }
-                                    let msg = message.0;
-                                    let message_id = message.1;
-                                    let state_clone = state_arc.clone();
-                                    log::debug!("<{}> Got message: {:?} Current state: {:?}", me.name, msg, state_clone.lock().await);
-                                    let msg_debug = format!("{:?}", msg);
-                                    let state = state_arc.clone();
-                                    let context = Context {
-                                        mgs: msg,
-                                        state: state,
-                                        self_ref: me.clone(),
-                                    };
-
-                                    let r = actor.receive(Arc::new(context));
-                                    {
-                                        let result = r.await;
-                                        log::trace!("<{}> Work result: {:?}", me.name, result);
-                                        if result.is_err() {
-                                            log::error!("<{}> Work error: {:?} on message {}", me.name, result, msg_debug);
+                                    let promise = ret_clone3.promise.lock().await.remove(&message_id);
+                                    match promise {
+                                        None => {
+                                            log::trace!("<{}> No promise for message_id: {}", me.name, message_id);
                                         }
-                                        let promise = ret_clone3.promise.lock().await.remove(&message_id);
-                                        match promise {
-                                            None => {
-                                                log::trace!("<{}> No promise for message_id: {}", me.name, message_id);
-                                            }
-                                            Some(promise) => {
-                                                log::trace!("<{}> Promise result: {:?}", me.name, result);
-                                                let _ = promise.send(result);
-                                            }
+                                        Some(promise) => {
+                                            log::trace!("<{}> Promise result: {:?}", me.name, result);
+                                            let _ = promise.send(result);
                                         }
-
                                     }
-                                    let state_clone = state_arc.clone();
-                                    log::trace!("<{}> After work on message new state: {:?}", me.name, state_clone.lock().await);
-
-
-
+                                }
+                                let state_clone = state_arc.clone();
+                                log::trace!("<{}> After work on message new state: {:?}", me.name, state_clone.lock().await);
                             }
                         };
-
-
+                    }
                 }
-            }
             }
         });
         *ret.join_handle.lock().await = Some(join_handle);
@@ -263,7 +285,7 @@ impl<Actor: Handler<Actor, Message, State, Response, Error> + Debug + Send + Syn
     /// # Returns
     /// - `Result<Response, Error>`: The response from the actor, or an error if the actor failed
     ///   to process the message or if the `tx` field is `None`.
-    pub async fn ask(&self, msg: Message) -> Result<Response, Error>
+    async fn ask(&self, msg: Self::Message) -> Result<Self::Response, Self::Error>
     {
         log::debug!("<{}> Result message: {:?}", self.name, msg);
 
@@ -317,7 +339,7 @@ impl<Actor: Handler<Actor, Message, State, Response, Error> + Debug + Send + Syn
     /// # Returns
     /// - `Result<(), std::io::Error>`: `Ok(())` if the message was sent successfully, or an error
     ///   if the message could not be sent or if the `tx` field is `None`.
-    pub async fn send(&self, msg: Message) -> Result<(), std::io::Error> {
+    async fn send(&self, msg: Self::Message) -> Result<(), std::io::Error> {
         log::debug!("<{}> Push message: {:?}", self.name, msg);
         let tx_lock = self.tx.lock().await;
         let tx = tx_lock.as_ref();
@@ -355,7 +377,7 @@ impl<Actor: Handler<Actor, Message, State, Response, Error> + Debug + Send + Syn
     /// # Returns
     /// - `Result<Arc<Mutex<State>>, std::io::Error>`: The current state of the actor wrapped in an `Arc<Mutex>`,
     ///   or an error if the `state` field is `None`.
-    pub async fn state(&self) -> Result<Arc<Mutex<State>>, std::io::Error> {
+    async fn state(&self) -> Result<Arc<Mutex<Self::State>>, std::io::Error> {
         let state_opt = self.state.clone();
         log::trace!("<{}> State: {:?}", self.name, state_opt);
         match state_opt {
@@ -382,7 +404,7 @@ impl<Actor: Handler<Actor, Message, State, Response, Error> + Debug + Send + Syn
     ///
     /// # Returns
     /// - `Result<(), Error>`: `Ok(())` if the actor was stopped successfully, or an `Error` if the `pre_stop` method of the actor returned an error.
-    pub async fn stop(&self) -> Result<(), Error> {
+    async fn stop(&self) -> Result<(), Self::Error> {
         if *self.running.lock().await == false {
             return Ok(());
         }

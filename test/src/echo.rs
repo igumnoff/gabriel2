@@ -35,7 +35,13 @@ impl From<std::io::Error> for EchoError {
     }
 }
 
-impl Handler<Echo, Message, State, Response, EchoError> for Echo {
+impl Handler for Echo {
+    type Actor = Echo;
+    type Message = Message;
+    type State = State;
+    type Response = Response;
+    type Error = EchoError;
+
     async fn receive(&self, ctx: Arc<Context<Echo, Message, State, Response, EchoError>>) -> Result<Response, EchoError> {
         match ctx.mgs {
             Message::Ping => {
