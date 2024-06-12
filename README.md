@@ -17,6 +17,7 @@ Gabriel2: Indeed, an actor library based on Tokio, written in Rust
 
 ## TODO
 - [ ] Load Balancer
+- [ ] Event Bus
 
 ## Usage
 
