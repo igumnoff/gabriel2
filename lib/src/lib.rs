@@ -144,7 +144,7 @@ pub trait ActorRefTrait {
 }
 
 
-impl <Actor: Handler<Actor = Actor, State = State, Message = Message, Error = Error, Response = Response> + Sync + Send + Debug + 'static,
+impl <Actor: Handler<Actor = Actor, State = State, Message = Message, Error = Error, Response = Response>,
     Message: Sync + Send + Debug + 'static, State:  Sync + Send + Debug + 'static, Response:  Sync + Send + Debug + 'static,
     Error: Sync + Send + Debug + std::error::Error + From<std::io::Error>+ 'static> ActorTrait for ActorRef<Actor, Message, State, Response, Error> {
     type Message = Message;
