@@ -6,20 +6,20 @@ use derive_more::{Display, Error};
 
 
 #[derive(Debug)]
-pub struct Echo;
+pub struct EchoActor;
 
 #[derive(Debug, Encode, Decode)]
-pub enum Message {
+pub enum EchoMessage {
     Ping,
 }
 
 #[derive(Debug, Encode, Decode)]
-pub enum Response {
+pub enum EchoResponse {
     Pong {counter: u32},
 }
 
 #[derive(Debug,Clone, Encode, Decode)]
-pub struct State {
+pub struct EchoState {
     pub counter: u32,
 }
 
@@ -35,23 +35,23 @@ impl From<std::io::Error> for EchoError {
     }
 }
 
-impl Handler for Echo {
-    type Actor = Echo;
-    type Message = Message;
-    type State = State;
-    type Response = Response;
+impl Handler for EchoActor {
+    type Actor = EchoActor;
+    type Message = EchoMessage;
+    type State = EchoState;
+    type Response = EchoResponse;
     type Error = EchoError;
 
-    async fn receive(&self, ctx: Arc<Context<Echo, Message, State, Response, EchoError>>) -> Result<Response, EchoError> {
+    async fn receive(&self, ctx: Arc<Context<Self::Actor, Self::Message, Self::State, Self::Response, Self::Error>>) -> Result<EchoResponse, EchoError> {
         match ctx.mgs {
-            Message::Ping => {
+            EchoMessage::Ping => {
                 println!("Received Ping");
                 let mut state_lock = ctx.state.lock().await;
                 state_lock.counter += 1;
                 if state_lock.counter > 10 {
                     Err(EchoError::Unknown)
                 } else {
-                    Ok(Response::Pong{counter: state_lock.counter})
+                    Ok(EchoResponse::Pong{counter: state_lock.counter})
                 }
             }
         }

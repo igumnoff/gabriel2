@@ -4,17 +4,17 @@ use gabriel2::*;
 use echo::*;
 #[tokio::main]
 async fn main() -> Result<(), EchoError> {
-    let state = State {
+    let state = EchoState {
         counter: 0,
     };
 
-    let echo_ref = ActorRef::new("echo", Echo{},  state, 100000).await?;
+    let echo_ref = ActorRef::new("echo", EchoActor {}, state, 100000).await?;
 
     println!("Sent Ping");
-    echo_ref.send(Message::Ping).await?;
+    echo_ref.send(EchoMessage::Ping).await?;
 
     println!("Sent Ping and ask response");
-    let pong = echo_ref.ask(Message::Ping).await?;
+    let pong = echo_ref.ask(EchoMessage::Ping).await?;
     println!("Got {:?}", pong);
 
     // _ = echo_ref.stop().await;
@@ -33,7 +33,7 @@ mod tests {
     use gabriel2::*;
 
     use thiserror::Error;
-    use crate::echo::{Echo, EchoError, Message, Response, State};
+    use crate::echo::{EchoActor, EchoError, EchoMessage, EchoResponse, EchoState};
 
 
     // #[tokio::test]
