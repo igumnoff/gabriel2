@@ -153,7 +153,6 @@ async fn main() -> Result<(), EchoError> {
     echo_client.send(Message::Ping).await?;
 
     println!("Sent Ping and ask response");
-
     let pong = echo_client.ask(Message::Ping).await?;
     println!("Got {:?}", pong);
 
