@@ -102,11 +102,15 @@ pub struct Context<Actor, Message, State, Response, Error> {
 /// - `pre_stop`: This method is called before the actor stops. It takes the state of the actor and a reference to the actor itself, and returns a `Future` that resolves to a `Result`. If the `Result` is `Ok`, the actor stops; if it is `Err`, the actor does not stop. By default, this method returns `Ok(())`.
 pub trait Handler<Actor: Sync + Send + 'static, Message: Sync + Send + 'static, State: Sync + Send + 'static, Response: Sync + Send + 'static, Error: Sync + Send + 'static> {
     fn receive(&self, ctx: Arc<Context<Actor, Message, State, Response, Error>>) -> impl Future<Output = Result<Response, Error>> + Send;
-    async fn pre_start(&self, _state: Arc<Mutex<State>>, _self_ref: Arc<ActorRef<Actor, Message, State, Response, Error>>) -> Result<(), Error> {
-        Ok(())
+    fn pre_start(&self, _state: Arc<Mutex<State>>, _self_ref: Arc<ActorRef<Actor, Message, State, Response, Error>>) -> impl Future<Output = Result<(), Error>> + Send {
+        async {
+            Ok(())
+        }
     }
-    async fn pre_stop(&self, _state: Arc<Mutex<State>>, _self_ref: Arc<ActorRef<Actor, Message, State, Response, Error>>) -> Result<(), Error> {
-        Ok(())
+    fn pre_stop(&self, _state: Arc<Mutex<State>>, _self_ref: Arc<ActorRef<Actor, Message, State, Response, Error>>) -> impl Future<Output = Result<(), Error>> + Send {
+        async {
+            Ok(())
+        }
     }
 }
 
