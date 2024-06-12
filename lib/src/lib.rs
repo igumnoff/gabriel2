@@ -2,7 +2,8 @@
 // #![doc = include_str!("../README.md")]
 //!
 
-
+#[cfg(feature = "remote")]
+pub mod remote;
 
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -46,12 +47,12 @@ use tokio::sync::oneshot::Sender;
 /// - `Error`: The type of the error that the actor can produce.
 #[derive(Debug)]
 pub struct ActorRef<Actor, Message, State, Response, Error> {
-    tx: Mutex<Option<mpsc::Sender<(Message, i32)>>>,
+    tx: Mutex<Option<mpsc::Sender<(Message, u64)>>>,
     join_handle: Mutex<Option<tokio::task::JoinHandle<()>>>,
     state: Option<Arc<Mutex<State>>>,
     self_ref: Mutex<Option<Arc<ActorRef<Actor, Message, State, Response, Error>>>>,
-    message_id: Mutex<i32>,
-    promise: Mutex<HashMap<i32, Sender<Result<Response, Error>>>>,
+    message_id: Mutex<u64>,
+    promise: Mutex<HashMap<u64, Sender<Result<Response, Error>>>>,
     name: String,
     actor: Mutex<Option<Arc<Actor>>>,
     running: Mutex<bool>,
@@ -59,7 +60,7 @@ pub struct ActorRef<Actor, Message, State, Response, Error> {
 
 impl<Actor, Message, State, Response, Error>  Drop for ActorRef<Actor, Message, State, Response, Error>  {
     fn drop(&mut self) {
-        log::debug!("Drop actor: {}", self.name);
+        log::trace!("Drop actor: {}", self.name);
     }
 }
 
@@ -139,7 +140,7 @@ impl<Actor: Handler<Actor, Message, State, Response, Error> + Debug + Send + Syn
     /// - `State`: The type of the state of the actor. This type must be `Debug`, `Send`, and `Sync`.
     /// - `Response`: The type of the response that the actor produces after processing a message. This type must be `Debug`, `Send`, and `Sync`.
     /// - `Error`: The type of the error that the actor can produce. This type must implement the `std::error::Error` trait and be `Debug`, `Send`, `Sync`, and `From<std::io::Error>`.
-    pub async fn new(name: String, actor: Actor, state: State, buffer: usize) -> Result<Arc<Self>, Error>
+    pub async fn new(name: impl AsRef<str>, actor: Actor, state: State, buffer: usize) -> Result<Arc<Self>, Error>
     {
         let state_arc = Arc::new(Mutex::new(state));
         let state_clone = state_arc.clone();
@@ -153,7 +154,7 @@ impl<Actor: Handler<Actor, Message, State, Response, Error> + Debug + Send + Syn
             self_ref: Mutex::new(None),
             message_id: Mutex::new(0),
             promise: Mutex::new(HashMap::new()),
-            name: name,
+            name: name.as_ref().to_string(),
             actor: Mutex::new(Some(actor_arc.clone())),
             running: Mutex::new(false),
         };
@@ -164,7 +165,8 @@ impl<Actor: Handler<Actor, Message, State, Response, Error> + Debug + Send + Syn
         let ret_clone3 = ret.clone();
         *ret.self_ref.lock().await = Some(ret.clone());
 
-        let join_handle = tokio::spawn(async move {
+        let handle = tokio::runtime::Handle::current();
+        let join_handle = handle.spawn(async move {
             let me = ret_clone2.clone();
 
             loop {
@@ -253,14 +255,20 @@ impl<Actor: Handler<Actor, Message, State, Response, Error> + Debug + Send + Syn
     /// is closed without sending a response, the method returns an error.
     ///
     /// # Parameters
-    /// - `mgs`: The message to send to the actor.
+    /// - `msg`: The message to send to the actor.
     ///
     /// # Returns
     /// - `Result<Response, Error>`: The response from the actor, or an error if the actor failed
     ///   to process the message or if the `tx` field is `None`.
-    pub async fn ask(&self, mgs: Message) -> Result<Response, Error>
+    pub async fn ask(&self, msg: Message) -> Result<Response, Error>
     {
-        log::debug!("<{}> Result message: {:?}", self.name, mgs);
+        log::debug!("<{}> Result message: {:?}", self.name, msg);
+
+        let counter = {
+            let mut counter = self.message_id.lock().await;
+            *counter += 1;
+            *counter
+        };
         let tx_lock = self.tx.lock().await;
         let tx = tx_lock.as_ref();
         match tx {
@@ -270,9 +278,8 @@ impl<Actor: Handler<Actor, Message, State, Response, Error> + Debug + Send + Syn
             Some(tx) => {
                 let (sender, receiver) = oneshot::channel();
                 {
-                    *self.message_id.lock().await += 1;
-                    self.promise.lock().await.insert(*self.message_id.lock().await, sender);
-                    let r = tx.send((mgs, *self.message_id.lock().await)).await;
+                    self.promise.lock().await.insert(counter, sender);
+                    let r = tx.send((msg, counter)).await;
                     if r.is_err() {
                         return Err(std::io::Error::new(std::io::ErrorKind::Other, "Err").into());
                     }
@@ -393,10 +400,11 @@ impl<Actor: Handler<Actor, Message, State, Response, Error> + Debug + Send + Syn
             None => {}
             Some(join_handle) => {
                 let _ = join_handle.abort();
-                log::debug!("join_handle abort()");
+                log::trace!("join_handle abort()");
             }
         }
         *self.join_handle.lock().await = None;
+        *self.promise.lock().await = HashMap::new();
         log::debug!("<{}> Stop worker", self.name);
         Ok(())
     }

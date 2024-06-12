@@ -1,34 +1,39 @@
 use std::sync::Arc;
 use gabriel2::*;
-use thiserror::Error;
 
 use async_trait::async_trait;
+use bincode::{Decode, Encode};
+use derive_more::{Display, Error};
 
 
 #[derive(Debug)]
 pub struct Echo;
 
-#[derive(Debug)]
+#[derive(Debug, Encode, Decode)]
 pub enum Message {
     Ping,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Encode, Decode)]
 pub enum Response {
     Pong {counter: u32},
 }
 
-#[derive(Debug,Clone)]
+#[derive(Debug,Clone, Encode, Decode)]
 pub struct State {
     pub counter: u32,
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Display, Error,  Encode, Decode)]
 pub enum EchoError {
-    #[error("unknown error")]
+    #[display(fmt = "Unknown error")]
     Unknown,
-    #[error("std::io::Error")]
-    StdErr(#[from] std::io::Error),
+}
+
+impl From<std::io::Error> for EchoError {
+    fn from(_err: std::io::Error) -> Self {
+        EchoError::Unknown
+    }
 }
 
 #[async_trait]
