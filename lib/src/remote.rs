@@ -9,7 +9,7 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::oneshot;
 use tokio::sync::oneshot::Sender;
-use crate::{ActorRef, Handler};
+use crate::{ActorRef, Handler, SSS};
 
 /// `ActorServer` is a structure that represents a server for actors.
 /// It contains a reference to an actor.
@@ -33,8 +33,8 @@ pub struct ActorServer<Actor, Message, State, Response, Error> {
 }
 
 
-impl<Actor: Handler<Actor, Message, State, Response, Error> + Debug + Send + Sync + 'static, Message: Debug + Encode + Decode  + Send + Sync + 'static, State: Debug + Encode + Decode  + Send + Sync + 'static,
-    Response: Debug + Encode + Decode  + Send + Sync + 'static, Error: std::error::Error + Debug + Encode + Decode  + Send + Sync + From<std::io::Error> + 'static>
+impl<Actor: Handler<Actor, Message, State, Response, Error> + Debug + SSS, Message: Debug + Encode + Decode  + SSS, State: Debug + Encode + Decode + SSS,
+    Response: Debug + Encode + Decode + SSS, Error: std::error::Error + Debug + Encode + Decode + SSS + From<std::io::Error>>
 ActorServer<Actor, Message, State, Response, Error> {
     /// Creates a new instance of `ActorServer`.
     ///

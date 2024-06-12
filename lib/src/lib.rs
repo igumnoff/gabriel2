@@ -13,6 +13,13 @@ use tokio::sync::{mpsc, oneshot};
 use futures::lock::{Mutex};
 use tokio::sync::oneshot::Sender;
 
+/// The `SSS` trait is a marker trait that identifies types which implement `Send` + `Sync` and have a `'static` lifetime.
+///
+/// This trait is implemented automatically for all types that satisfy `Send` + `Sync` + `'static`.
+///
+/// The `SSS` trait is mainly used to improve code readability by providing a concise way to express these bounds.
+pub trait SSS: Send + Sync + 'static {}
+impl<S> SSS for S where S: Send + Sync + 'static {}
 
 /// The `ActorRef` struct represents a reference to an actor in the Actorlib framework.
 /// It contains the following fields:
@@ -100,7 +107,7 @@ pub struct Context<Actor, Message, State, Response, Error> {
 /// - `receive`: This method is called when the actor receives a message. It takes a context, which contains the message and the state of the actor, and returns a `Future` that resolves to a `Result` containing either the response produced by the actor after processing the message, or an error.
 /// - `pre_start`: This method is called before the actor starts. It takes the state of the actor and a reference to the actor itself, and returns a `Future` that resolves to a `Result`. If the `Result` is `Ok`, the actor starts; if it is `Err`, the actor does not start. By default, this method returns `Ok(())`.
 /// - `pre_stop`: This method is called before the actor stops. It takes the state of the actor and a reference to the actor itself, and returns a `Future` that resolves to a `Result`. If the `Result` is `Ok`, the actor stops; if it is `Err`, the actor does not stop. By default, this method returns `Ok(())`.
-pub trait Handler<Actor: Sync + Send + 'static, Message: Sync + Send + 'static, State: Sync + Send + 'static, Response: Sync + Send + 'static, Error: Sync + Send + 'static> {
+pub trait Handler<Actor: SSS, Message: SSS, State: SSS, Response: SSS, Error: SSS> {
     fn receive(&self, ctx: Arc<Context<Actor, Message, State, Response, Error>>) -> impl Future<Output = Result<Response, Error>> + Send;
     fn pre_start(&self, _state: Arc<Mutex<State>>, _self_ref: Arc<ActorRef<Actor, Message, State, Response, Error>>) -> impl Future<Output = Result<(), Error>> + Send {
         async {
@@ -114,8 +121,8 @@ pub trait Handler<Actor: Sync + Send + 'static, Message: Sync + Send + 'static, 
     }
 }
 
-impl<Actor: Handler<Actor, Message, State, Response, Error> + Debug + Send + Sync + 'static, Message: Debug + Send + Sync + 'static, State: Debug + Send + Sync + 'static,
-    Response: Debug + Send + Sync + 'static, Error: std::error::Error + Debug + Send + Sync + From<std::io::Error> + 'static> ActorRef<Actor, Message, State, Response, Error> {
+impl<Actor: Handler<Actor, Message, State, Response, Error> + Debug + SSS, Message: Debug + SSS, State: Debug + SSS,
+    Response: Debug + SSS, Error: std::error::Error + Debug + SSS + From<std::io::Error>> ActorRef<Actor, Message, State, Response, Error> {
 
     /// Creates a new `ActorRef` instance.
     ///
@@ -186,7 +193,7 @@ impl<Actor: Handler<Actor, Message, State, Response, Error> + Debug + Send + Syn
                             }
                             Some(message) => {
                                     if *ret_clone3.running.lock().await == false {
-                                        return ();
+                                        return;
                                     }
                                     let msg = message.0;
                                     let message_id = message.1;
