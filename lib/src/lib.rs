@@ -120,17 +120,19 @@ pub trait Handler {
     }
 }
 
-pub trait ActorTrait<Message: Sync + Send + Debug + 'static, Response: Sync + Send + Debug + 'static,
-    Error: Sync + Send + Debug + std::error::Error + From<std::io::Error>+ 'static> {
+pub trait ActorTrait {
+    type Message: Sync + Send + Debug + 'static;
+    type Response: Sync + Send + Debug + 'static;
+    type Error: Sync + Send + Debug + std::error::Error + From<std::io::Error>+ 'static;
 
-    fn ask(&self, msg: Message) -> impl Future<Output = Result<Response, Error>>;
-    fn send(&self, msg: Message) -> impl Future<Output = Result<(), std::io::Error>>;
-    fn stop(&self) ->impl Future<Output = Result<(), Error>>;
+    fn ask(&self, msg: Self::Message) -> impl Future<Output = Result<Self::Response, Self::Error>>;
+    fn send(&self, msg: Self::Message) -> impl Future<Output = Result<(), std::io::Error>>;
+    fn stop(&self) ->impl Future<Output = Result<(), Self::Error>>;
 
 }
 
 
-pub trait ActorRefTrait: ActorTrait<Self::Message, Self::Response,Self::Error> {
+pub trait ActorRefTrait {
     type Actor:  Handler + Sync + Send + Debug + 'static;
     type Message: Sync + Send + Debug + 'static;
     type State: Sync + Send + Debug + 'static;
@@ -144,7 +146,11 @@ pub trait ActorRefTrait: ActorTrait<Self::Message, Self::Response,Self::Error> {
 
 impl <Actor: Handler<Actor = Actor, State = State, Message = Message, Error = Error, Response = Response> + Sync + Send + Debug + 'static,
     Message: Sync + Send + Debug + 'static, State:  Sync + Send + Debug + 'static, Response:  Sync + Send + Debug + 'static,
-    Error: Sync + Send + Debug + std::error::Error + From<std::io::Error>+ 'static> ActorTrait<Message, Response, Error> for ActorRef<Actor, Message, State, Response, Error> {
+    Error: Sync + Send + Debug + std::error::Error + From<std::io::Error>+ 'static> ActorTrait for ActorRef<Actor, Message, State, Response, Error> {
+    type Message = Message;
+    type Response = Response;
+    type Error = Error;
+
 
     /// Sends a message to the actor and waits for a response.
     ///
