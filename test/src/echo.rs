@@ -1,7 +1,6 @@
 use std::sync::Arc;
 use gabriel2::*;
 
-use async_trait::async_trait;
 use bincode::{Decode, Encode};
 use derive_more::{Display, Error};
 
@@ -36,7 +35,6 @@ impl From<std::io::Error> for EchoError {
     }
 }
 
-#[async_trait]
 impl Handler<Echo, Message, State, Response, EchoError> for Echo {
     async fn receive(&self, ctx: Arc<Context<Echo, Message, State, Response, EchoError>>) -> Result<Response, EchoError> {
         match ctx.mgs {

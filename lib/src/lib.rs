@@ -7,10 +7,10 @@ pub mod remote;
 
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::future::Future;
 use std::sync::{Arc};
 use tokio::sync::{mpsc, oneshot};
 use futures::lock::{Mutex};
-use async_trait::async_trait;
 use tokio::sync::oneshot::Sender;
 
 
@@ -100,9 +100,8 @@ pub struct Context<Actor, Message, State, Response, Error> {
 /// - `receive`: This method is called when the actor receives a message. It takes a context, which contains the message and the state of the actor, and returns a `Future` that resolves to a `Result` containing either the response produced by the actor after processing the message, or an error.
 /// - `pre_start`: This method is called before the actor starts. It takes the state of the actor and a reference to the actor itself, and returns a `Future` that resolves to a `Result`. If the `Result` is `Ok`, the actor starts; if it is `Err`, the actor does not start. By default, this method returns `Ok(())`.
 /// - `pre_stop`: This method is called before the actor stops. It takes the state of the actor and a reference to the actor itself, and returns a `Future` that resolves to a `Result`. If the `Result` is `Ok`, the actor stops; if it is `Err`, the actor does not stop. By default, this method returns `Ok(())`.
-#[async_trait]
 pub trait Handler<Actor: Sync + Send + 'static, Message: Sync + Send + 'static, State: Sync + Send + 'static, Response: Sync + Send + 'static, Error: Sync + Send + 'static> {
-    async fn receive(&self, ctx: Arc<Context<Actor, Message, State, Response, Error>>) -> Result<Response, Error>;
+    fn receive(&self, ctx: Arc<Context<Actor, Message, State, Response, Error>>) -> impl Future<Output = Result<Response, Error>> + Send;
     async fn pre_start(&self, _state: Arc<Mutex<State>>, _self_ref: Arc<ActorRef<Actor, Message, State, Response, Error>>) -> Result<(), Error> {
         Ok(())
     }

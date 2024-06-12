@@ -31,7 +31,6 @@ mod tests {
     use std::sync::{Arc};
     use std::time::Duration;
     use gabriel2::*;
-    use async_trait::async_trait;
 
     use thiserror::Error;
     use crate::echo::{Echo, EchoError, Message, Response, State};
@@ -69,7 +68,6 @@ mod tests {
         StdErr(#[from] std::io::Error),
     }
 
-    #[async_trait]
     impl Handler<UserActor, UserMessage, UserState, UserResponse, UserError> for UserActor {
 
         async fn receive(&self, ctx: Arc<Context<UserActor, UserMessage, UserState, UserResponse, UserError>>) -> Result<UserResponse, UserError> {
