@@ -120,7 +120,17 @@ pub trait Handler {
     }
 }
 
-pub trait ActorRefTrait {
+pub trait ActorTrait<Message: Sync + Send + Debug + 'static, Response: Sync + Send + Debug + 'static,
+    Error: Sync + Send + Debug + std::error::Error + From<std::io::Error>+ 'static> {
+
+    fn ask(&self, msg: Message) -> impl Future<Output = Result<Response, Error>>;
+    fn send(&self, msg: Message) -> impl Future<Output = Result<(), std::io::Error>>;
+    fn stop(&self) ->impl Future<Output = Result<(), Error>>;
+
+}
+
+
+pub trait ActorRefTrait: ActorTrait<Self::Message, Self::Response,Self::Error> {
     type Actor:  Handler + Sync + Send + Debug + 'static;
     type Message: Sync + Send + Debug + 'static;
     type State: Sync + Send + Debug + 'static;
@@ -128,15 +138,164 @@ pub trait ActorRefTrait {
     type Error: Sync + Send + Debug + std::error::Error + From<std::io::Error>+ 'static;
 
     fn new(name: impl AsRef<str>, actor: Self::Actor, state: Self::State, buffer: usize) -> impl Future<Output = Result<Arc<Self>, Self::Error>>;
-    fn ask(&self, msg: Self::Message) -> impl Future<Output = Result<Self::Response, Self::Error>>;
-    fn send(&self, msg: Self::Message) -> impl Future<Output = Result<(), std::io::Error>>;
     fn state(&self) -> impl Future<Output = Result<Arc<Mutex<Self::State>>, std::io::Error>>;
-    fn stop(&self) ->impl Future<Output = Result<(), Self::Error>>;
-
 }
 
-// <Actor: Handler + Debug + Send + Sync + 'static, Message: Debug + Send + Sync + 'static, State: Debug + Send + Sync + 'static,
-//     Response: Debug + Send + Sync + 'static, Error: std::error::Error + Debug + Send + Sync + From<std::io::Error> + 'static>
+
+impl <Actor: Handler<Actor = Actor, State = State, Message = Message, Error = Error, Response = Response> + Sync + Send + Debug + 'static,
+    Message: Sync + Send + Debug + 'static, State:  Sync + Send + Debug + 'static, Response:  Sync + Send + Debug + 'static,
+    Error: Sync + Send + Debug + std::error::Error + From<std::io::Error>+ 'static> ActorTrait<Message, Response, Error> for ActorRef<Actor, Message, State, Response, Error> {
+
+    /// Sends a message to the actor and waits for a response.
+    ///
+    /// This method is part of the `ActorRef` struct and is used to send a message to the actor
+    /// and wait for a response. This is done by sending the message and a unique message ID
+    /// through a channel to the actor's task, which processes the message and sends the response
+    /// back through a one-shot channel.
+    ///
+    /// The method locks the `tx` field of the `ActorRef` struct, which is an `Option` containing
+    /// a sender part of a message passing channel. If the `tx` field is `None`, the method returns
+    /// an error. Otherwise, it creates a new one-shot channel for the response, increments the
+    /// message ID, inserts the sender part of the one-shot channel into the `promise` field of the
+    /// `ActorRef` struct (which is a `HashMap` mapping message IDs to one-shot channel senders),
+    /// and sends the message and the message ID through the `tx` channel.
+    ///
+    /// After sending the message, the method awaits the receiver part of the one-shot channel.
+    /// If the receiver receives a response, the method returns the response. If the receiver
+    /// is closed without sending a response, the method returns an error.
+    ///
+    /// # Parameters
+    /// - `msg`: The message to send to the actor.
+    ///
+    /// # Returns
+    /// - `Result<Response, Error>`: The response from the actor, or an error if the actor failed
+    ///   to process the message or if the `tx` field is `None`.
+    async fn ask(&self, msg: Message) -> Result<Response, Error>
+    {
+        log::debug!("<{}> Result message: {:?}", self.name, msg);
+
+        let counter = {
+            let mut counter = self.message_id.lock().await;
+            *counter += 1;
+            *counter
+        };
+        let tx_lock = self.tx.lock().await;
+        let tx = tx_lock.as_ref();
+        match tx {
+            None => {
+                return Err(std::io::Error::new(std::io::ErrorKind::Other, "Err").into());
+            }
+            Some(tx) => {
+                let (sender, receiver) = oneshot::channel();
+                {
+                    self.promise.lock().await.insert(counter, sender);
+                    let r = tx.send((msg, counter)).await;
+                    if r.is_err() {
+                        return Err(std::io::Error::new(std::io::ErrorKind::Other, "Err").into());
+                    }
+                }
+                let r = receiver.await;
+                match r {
+                    Ok(res) => { res }
+                    Err(_) => {
+                        return Err(std::io::Error::new(std::io::ErrorKind::Other, "Err").into());
+                    }
+                }
+            }
+        }
+    }
+
+    /// Sends a message to the actor without waiting for a response.
+    ///
+    /// This method is part of the `ActorRef` struct and is used to send a message to the actor
+    /// without waiting for a response. This is done by sending the message and a zero message ID
+    /// through a channel to the actor's task, which processes the message.
+    ///
+    /// The method locks the `tx` field of the `ActorRef` struct, which is an `Option` containing
+    /// a sender part of a message passing channel. If the `tx` field is `None`, the method returns
+    /// an error. Otherwise, it sends the message and a zero message ID through the `tx` channel.
+    ///
+    /// After sending the message, the method returns `Ok(())` if the message was sent successfully,
+    /// or an error if the message could not be sent.
+    ///
+    /// # Parameters
+    /// - `msg`: The message to send to the actor.
+    ///
+    /// # Returns
+    /// - `Result<(), std::io::Error>`: `Ok(())` if the message was sent successfully, or an error
+    ///   if the message could not be sent or if the `tx` field is `None`.
+    async fn send(&self, msg: Message) -> Result<(), std::io::Error> {
+        log::debug!("<{}> Push message: {:?}", self.name, msg);
+        let tx_lock = self.tx.lock().await;
+        let tx = tx_lock.as_ref();
+        match tx {
+            None => {
+                return Err(std::io::Error::new(std::io::ErrorKind::Other, "Err").into());
+            }
+            Some(tx) => {
+                let r = tx.send((msg, 0)).await;
+                if r.is_err() {
+                    return Err(std::io::Error::new(std::io::ErrorKind::Other, "Err").into());
+                }
+                // let r = tx.try_send((msg, 0));
+                // match r {
+                //     Ok(_) => {}
+                //     Err(err) => {
+                //         let err_str = format!("{:?}", err);
+                //         return Err(std::io::Error::new(std::io::ErrorKind::Other, err_str).into());
+                //     }
+                // }
+            }
+        }
+        Ok(())
+    }
+
+    /// Stops the actor.
+    ///
+    /// This method is part of the `ActorRef` struct and is used to stop the actor's execution.
+    ///
+    /// The method performs the following steps:
+    /// 1. Checks if the actor is already stopped. If it is, the method returns `Ok(())`.
+    /// 2. Calls the `pre_stop` method of the actor.
+    /// 3. Sets the `running` flag of the `ActorRef` to `false`.
+    /// 4. Clears the `tx` and `self_ref` fields of the `ActorRef`.
+    /// 5. Aborts the actor's task if it is running.
+    /// 6. Clears the `join_handle` field of the `ActorRef`.
+    /// 7. Logs a debug message indicating that the actor has stopped.
+    ///
+    /// # Returns
+    /// - `Result<(), Error>`: `Ok(())` if the actor was stopped successfully, or an `Error` if the `pre_stop` method of the actor returned an error.
+    async fn stop(&self) -> Result<(), Error> {
+        if *self.running.lock().await == false {
+            return Ok(());
+        }
+        {
+            let self_ref =  self.self_ref.lock().await.clone().unwrap();
+            let mut lock = self.actor.lock().await;
+            let actor = lock.as_ref().unwrap();
+            actor.pre_stop(self.state.clone().unwrap(), self_ref).await?;
+            *lock = None;
+        }
+        *self.self_ref.lock().await = None;
+
+        *self.running.lock().await = false;
+        *self.tx.lock().await = None;
+        *self.self_ref.lock().await = None;
+        let join_handle = self.join_handle.lock().await.take();
+        match join_handle {
+            None => {}
+            Some(join_handle) => {
+                let _ = join_handle.abort();
+                log::trace!("join_handle abort()");
+            }
+        }
+        *self.join_handle.lock().await = None;
+        *self.promise.lock().await = HashMap::new();
+        log::debug!("<{}> Stop worker", self.name);
+        Ok(())
+    }
+}
+
 impl <Actor: Handler<Actor = Actor, State = State, Message = Message, Error = Error, Response = Response> + Sync + Send + Debug + 'static , Message: Sync + Send + Debug + 'static,
     State:  Sync + Send + Debug + 'static, Response:  Sync + Send + Debug + 'static,
     Error: Sync + Send + Debug + std::error::Error + From<std::io::Error>+ 'static>  ActorRefTrait for ActorRef<Actor, Message, State, Response, Error> {
@@ -261,109 +420,6 @@ impl <Actor: Handler<Actor = Actor, State = State, Message = Message, Error = Er
         Ok(ret_clone)
     }
 
-    /// Sends a message to the actor and waits for a response.
-    ///
-    /// This method is part of the `ActorRef` struct and is used to send a message to the actor
-    /// and wait for a response. This is done by sending the message and a unique message ID
-    /// through a channel to the actor's task, which processes the message and sends the response
-    /// back through a one-shot channel.
-    ///
-    /// The method locks the `tx` field of the `ActorRef` struct, which is an `Option` containing
-    /// a sender part of a message passing channel. If the `tx` field is `None`, the method returns
-    /// an error. Otherwise, it creates a new one-shot channel for the response, increments the
-    /// message ID, inserts the sender part of the one-shot channel into the `promise` field of the
-    /// `ActorRef` struct (which is a `HashMap` mapping message IDs to one-shot channel senders),
-    /// and sends the message and the message ID through the `tx` channel.
-    ///
-    /// After sending the message, the method awaits the receiver part of the one-shot channel.
-    /// If the receiver receives a response, the method returns the response. If the receiver
-    /// is closed without sending a response, the method returns an error.
-    ///
-    /// # Parameters
-    /// - `msg`: The message to send to the actor.
-    ///
-    /// # Returns
-    /// - `Result<Response, Error>`: The response from the actor, or an error if the actor failed
-    ///   to process the message or if the `tx` field is `None`.
-    async fn ask(&self, msg: Self::Message) -> Result<Self::Response, Self::Error>
-    {
-        log::debug!("<{}> Result message: {:?}", self.name, msg);
-
-        let counter = {
-            let mut counter = self.message_id.lock().await;
-            *counter += 1;
-            *counter
-        };
-        let tx_lock = self.tx.lock().await;
-        let tx = tx_lock.as_ref();
-        match tx {
-            None => {
-                return Err(std::io::Error::new(std::io::ErrorKind::Other, "Err").into());
-            }
-            Some(tx) => {
-                let (sender, receiver) = oneshot::channel();
-                {
-                    self.promise.lock().await.insert(counter, sender);
-                    let r = tx.send((msg, counter)).await;
-                    if r.is_err() {
-                        return Err(std::io::Error::new(std::io::ErrorKind::Other, "Err").into());
-                    }
-                }
-                let r = receiver.await;
-                match r {
-                    Ok(res) => { res }
-                    Err(_) => {
-                        return Err(std::io::Error::new(std::io::ErrorKind::Other, "Err").into());
-                    }
-                }
-            }
-        }
-    }
-
-    /// Sends a message to the actor without waiting for a response.
-    ///
-    /// This method is part of the `ActorRef` struct and is used to send a message to the actor
-    /// without waiting for a response. This is done by sending the message and a zero message ID
-    /// through a channel to the actor's task, which processes the message.
-    ///
-    /// The method locks the `tx` field of the `ActorRef` struct, which is an `Option` containing
-    /// a sender part of a message passing channel. If the `tx` field is `None`, the method returns
-    /// an error. Otherwise, it sends the message and a zero message ID through the `tx` channel.
-    ///
-    /// After sending the message, the method returns `Ok(())` if the message was sent successfully,
-    /// or an error if the message could not be sent.
-    ///
-    /// # Parameters
-    /// - `msg`: The message to send to the actor.
-    ///
-    /// # Returns
-    /// - `Result<(), std::io::Error>`: `Ok(())` if the message was sent successfully, or an error
-    ///   if the message could not be sent or if the `tx` field is `None`.
-    async fn send(&self, msg: Self::Message) -> Result<(), std::io::Error> {
-        log::debug!("<{}> Push message: {:?}", self.name, msg);
-        let tx_lock = self.tx.lock().await;
-        let tx = tx_lock.as_ref();
-        match tx {
-            None => {
-                return Err(std::io::Error::new(std::io::ErrorKind::Other, "Err").into());
-            }
-            Some(tx) => {
-                let r = tx.send((msg, 0)).await;
-                if r.is_err() {
-                    return Err(std::io::Error::new(std::io::ErrorKind::Other, "Err").into());
-                }
-                // let r = tx.try_send((msg, 0));
-                // match r {
-                //     Ok(_) => {}
-                //     Err(err) => {
-                //         let err_str = format!("{:?}", err);
-                //         return Err(std::io::Error::new(std::io::ErrorKind::Other, err_str).into());
-                //     }
-                // }
-            }
-        }
-        Ok(())
-    }
 
     /// Retrieves the current state of the actor.
     ///
@@ -389,50 +445,7 @@ impl <Actor: Handler<Actor = Actor, State = State, Message = Message, Error = Er
             }
         }
     }
-    /// Stops the actor.
-    ///
-    /// This method is part of the `ActorRef` struct and is used to stop the actor's execution.
-    ///
-    /// The method performs the following steps:
-    /// 1. Checks if the actor is already stopped. If it is, the method returns `Ok(())`.
-    /// 2. Calls the `pre_stop` method of the actor.
-    /// 3. Sets the `running` flag of the `ActorRef` to `false`.
-    /// 4. Clears the `tx` and `self_ref` fields of the `ActorRef`.
-    /// 5. Aborts the actor's task if it is running.
-    /// 6. Clears the `join_handle` field of the `ActorRef`.
-    /// 7. Logs a debug message indicating that the actor has stopped.
-    ///
-    /// # Returns
-    /// - `Result<(), Error>`: `Ok(())` if the actor was stopped successfully, or an `Error` if the `pre_stop` method of the actor returned an error.
-    async fn stop(&self) -> Result<(), Self::Error> {
-        if *self.running.lock().await == false {
-            return Ok(());
-        }
-        {
-            let self_ref =  self.self_ref.lock().await.clone().unwrap();
-            let mut lock = self.actor.lock().await;
-            let actor = lock.as_ref().unwrap();
-            actor.pre_stop(self.state.clone().unwrap(), self_ref).await?;
-            *lock = None;
-        }
-        *self.self_ref.lock().await = None;
 
-        *self.running.lock().await = false;
-        *self.tx.lock().await = None;
-        *self.self_ref.lock().await = None;
-        let join_handle = self.join_handle.lock().await.take();
-        match join_handle {
-            None => {}
-            Some(join_handle) => {
-                let _ = join_handle.abort();
-                log::trace!("join_handle abort()");
-            }
-        }
-        *self.join_handle.lock().await = None;
-        *self.promise.lock().await = HashMap::new();
-        log::debug!("<{}> Stop worker", self.name);
-        Ok(())
-    }
 }
 
 
