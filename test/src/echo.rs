@@ -6,7 +6,7 @@ use bincode::{Decode, Encode};
 use derive_more::{Display, Error};
 
 
-#[derive(Debug, Encode, Decode)]
+#[derive(Debug)]
 pub struct Echo;
 
 #[derive(Debug, Encode, Decode)]

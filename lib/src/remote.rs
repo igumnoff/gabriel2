@@ -18,7 +18,7 @@ pub struct ActorServer<Actor, Message, State, Response, Error> {
 }
 
 
-impl<Actor: Handler<Actor, Message, State, Response, Error> + Debug + Encode + Decode  + Send + Sync + 'static, Message: Debug + Encode + Decode  + Send + Sync + 'static, State: Debug + Encode + Decode  + Send + Sync + 'static,
+impl<Actor: Handler<Actor, Message, State, Response, Error> + Debug + Send + Sync + 'static, Message: Debug + Encode + Decode  + Send + Sync + 'static, State: Debug + Encode + Decode  + Send + Sync + 'static,
     Response: Debug + Encode + Decode  + Send + Sync + 'static, Error: std::error::Error + Debug + Encode + Decode  + Send + Sync + From<std::io::Error> + 'static>
 ActorServer<Actor, Message, State, Response, Error> {
     pub async fn new(name: impl AsRef<str>, host: impl AsRef<str>, port: u16, actor: Arc<ActorRef<Actor,Message, State, Response, Error>>) -> Result<Arc<Self>, Error>
@@ -179,7 +179,7 @@ pub struct ActorClient<Actor, Message, State, Response, Error> {
 }
 
 
-impl<Actor: Handler<Actor, Message, State, Response, Error> + Debug + Encode + Decode + Send + Sync + 'static, Message: Debug + Encode + Decode + Send + Sync + 'static, State: Debug + Encode + Decode + Send + Sync + 'static,
+impl<Actor: Handler<Actor, Message, State, Response, Error> + Debug + Send + Sync + 'static, Message: Debug + Encode + Decode + Send + Sync + 'static, State: Debug + Encode + Decode + Send + Sync + 'static,
     Response: Debug + Encode + Decode + Send + Sync + 'static, Error: std::error::Error + Debug + Encode + Decode + Send + Sync + From<std::io::Error> + 'static>
 ActorClient<Actor, Message, State, Response, Error> {
     pub async fn new(name: impl AsRef<str>, host: impl AsRef<str>, port: u16) -> Result<Arc<Self>, Error>
