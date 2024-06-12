@@ -11,6 +11,21 @@ use tokio::sync::oneshot;
 use tokio::sync::oneshot::Sender;
 use crate::{ActorRef, Handler};
 
+/// `ActorServer` is a structure that represents a server for actors.
+/// It contains a reference to an actor.
+///
+/// # Type Parameters
+///
+/// * `Actor`: The type of the actor that this server is hosting.
+/// * `Message`: The type of the messages that the actor can handle.
+/// * `State`: The type of the state that the actor maintains.
+/// * `Response`: The type of the response that the actor produces when handling a message.
+/// * `Error`: The type of the error that the actor can produce when handling a message.
+///
+/// # Fields
+///
+/// * `actor_ref`: A mutex protecting an optional reference to the actor. This allows the actor to be safely shared between multiple threads.
+/// * `failed`: ...
 #[derive(Debug)]
 pub struct ActorServer<Actor, Message, State, Response, Error> {
     actor_ref: Mutex<Option<Arc<crate::ActorRef<Actor, Message, State, Response, Error>>>>,
@@ -21,6 +36,22 @@ pub struct ActorServer<Actor, Message, State, Response, Error> {
 impl<Actor: Handler<Actor, Message, State, Response, Error> + Debug + Send + Sync + 'static, Message: Debug + Encode + Decode  + Send + Sync + 'static, State: Debug + Encode + Decode  + Send + Sync + 'static,
     Response: Debug + Encode + Decode  + Send + Sync + 'static, Error: std::error::Error + Debug + Encode + Decode  + Send + Sync + From<std::io::Error> + 'static>
 ActorServer<Actor, Message, State, Response, Error> {
+    /// Creates a new instance of `ActorServer`.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - A string slice that holds the name of the actor server.
+    /// * `host` - A string slice that holds the host of the actor server.
+    /// * `port` - A 16-bit unsigned integer that represents the port on which the actor server will run.
+    /// * `actor` - An `Arc` reference to an `ActorRef` object.
+    ///
+    /// # Returns
+    ///
+    /// * `Result<Arc<Self>, Error>` - Returns a new instance of `ActorServer` wrapped in an `Arc`. If an error occurs, it returns an `Error`.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the TCP listener fails to bind to the provided address.
     pub async fn new(name: impl AsRef<str>, host: impl AsRef<str>, port: u16, actor: Arc<ActorRef<Actor,Message, State, Response, Error>>) -> Result<Arc<Self>, Error>
     {
         let name = name.as_ref().to_string();
@@ -154,6 +185,18 @@ ActorServer<Actor, Message, State, Response, Error> {
 
         Ok(actor_server.clone())
     }
+    /// Stops the `ActorServer`.
+    ///
+    /// This method attempts to stop the actor referenced by this server. If the actor reference exists, it will call the `stop` method on the actor.
+    /// After attempting to stop the actor, it sets the actor reference to `None`.
+    ///
+    /// # Returns
+    ///
+    /// * `Result<(), Error>` - Returns an empty `Result` if the operation is successful. If an error occurs while stopping the actor, it returns an `Error`.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the actor fails to stop.
     pub async fn stop(&self) -> Result<(), Error> {
         if let Some(actor_ref) = self.actor_ref.lock().await.as_ref() {
             actor_ref.stop().await?;
@@ -164,6 +207,25 @@ ActorServer<Actor, Message, State, Response, Error> {
 }
 
 
+/// `ActorClient` is a structure that represents a client for actors in an actor system.
+/// It contains a reference to a TCP stream for reading and writing, a counter for message IDs, and a map of promises for responses.
+///
+/// # Type Parameters
+///
+/// * `Actor`: The type of the actor that this client is interacting with.
+/// * `Message`: The type of the messages that the actor can handle.
+/// * `State`: The type of the state that the actor maintains.
+/// * `Response`: The type of the response that the actor produces when handling a message.
+/// * `Error`: The type of the error that the actor can produce when handling a message.
+///
+/// # Fields
+///
+/// * `_marker_actor`, `_marker_message`, `_marker_state`, `_marker_response`, `_marker_error`: PhantomData markers for the type parameters.
+/// * `read_half`: A mutex protecting the read half of a TCP stream. This allows the stream to be safely shared between multiple threads.
+/// * `write_half`: A mutex protecting the write half of a TCP stream. This allows the stream to be safely shared between multiple threads.
+/// * `counter`: A mutex protecting a counter used for generating unique message IDs. This allows the counter to be safely shared between multiple threads.
+/// * `name`: The name of the actor client.
+/// * `promise`: A mutex protecting a map from message IDs to oneshot senders. This allows the map to be safely shared between multiple threads.
 #[derive(Debug)]
 pub struct ActorClient<Actor, Message, State, Response, Error> {
     _marker_actor: PhantomData<Actor>,
@@ -178,7 +240,25 @@ pub struct ActorClient<Actor, Message, State, Response, Error> {
     promise: Mutex<HashMap<u64, Sender<Result<Response, Error>>>>,
 }
 
-
+/// Creates a new instance of `ActorClient`.
+///
+/// This method attempts to connect to a TCP server at the provided host and port. It then splits the TCP stream into a read half and a write half.
+/// It creates a new `ActorClient` instance with the read half, write half, and other necessary fields.
+/// It also spawns a new async task that continuously reads from the read half of the TCP stream and handles incoming messages.
+///
+/// # Arguments
+///
+/// * `name` - A string slice that holds the name of the actor client.
+/// * `host` - A string slice that holds the host of the TCP server to connect to.
+/// * `port` - A 16-bit unsigned integer that represents the port of the TCP server to connect to.
+///
+/// # Returns
+///
+/// * `Result<Arc<Self>, Error>` - Returns a new instance of `ActorClient` wrapped in an `Arc`. If an error occurs, it returns an `Error`.
+///
+/// # Errors
+///
+/// This function will return an error if the TCP stream fails to connect to the provided address.
 impl<Actor: Handler<Actor, Message, State, Response, Error> + Debug + Send + Sync + 'static, Message: Debug + Encode + Decode + Send + Sync + 'static, State: Debug + Encode + Decode + Send + Sync + 'static,
     Response: Debug + Encode + Decode + Send + Sync + 'static, Error: std::error::Error + Debug + Encode + Decode + Send + Sync + From<std::io::Error> + 'static>
 ActorClient<Actor, Message, State, Response, Error> {
@@ -261,7 +341,23 @@ ActorClient<Actor, Message, State, Response, Error> {
         Ok(actor)
     }
 
-
+    /// Sends an "Ask" message to the actor server and waits for a response.
+    ///
+    /// This method creates a new oneshot channel for receiving the response. It increments the message ID counter and sends a serialized "Ask" message to the actor server.
+    /// The message ID and the oneshot sender are stored in a map, allowing the response to be received asynchronously.
+    /// After sending the message, this method waits for the response on the oneshot receiver.
+    ///
+    /// # Arguments
+    ///
+    /// * `msg` - The message to be sent to the actor server.
+    ///
+    /// # Returns
+    ///
+    /// * `Result<Response, Error>` - Returns the response from the actor server if the operation is successful. If an error occurs, it returns an `Error`.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the TCP stream fails to write the message or if the oneshot receiver is cancelled (which should not normally happen).
     pub async fn ask(&self, msg: Message) -> Result<Response, Error>
     {
         let (sender, receiver) = oneshot::channel();
@@ -292,6 +388,22 @@ ActorClient<Actor, Message, State, Response, Error> {
         }
     }
 
+    /// Sends a "Send" message to the actor server.
+    ///
+    /// This method increments the message ID counter and sends a serialized "Send" message to the actor server.
+    /// The message ID is used to track the message and the response from the server.
+    ///
+    /// # Arguments
+    ///
+    /// * `msg` - The message to be sent to the actor server.
+    ///
+    /// # Returns
+    ///
+    /// * `Result<(), std::io::Error>` - Returns an empty `Result` if the operation is successful. If an error occurs, it returns an `Error`.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the TCP stream fails to write the message.
     pub async fn send(&self, msg: Message) -> Result<(), std::io::Error> {
         let counter = {
             let mut counter = self.counter.lock().await;
@@ -313,6 +425,18 @@ ActorClient<Actor, Message, State, Response, Error> {
     pub async fn state(&self) -> Result<Arc<Mutex<State>>, std::io::Error> {
         todo!()
     }
+    /// Stops the `ActorClient`.
+    ///
+    /// This method clears the promises map and shuts down the write half of the TCP stream.
+    /// It logs the stopping of the worker and then returns.
+    ///
+    /// # Returns
+    ///
+    /// * `Result<(), Error>` - Returns an empty `Result` if the operation is successful. If an error occurs while shutting down the write half of the TCP stream, it returns an `Error`.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the TCP stream fails to shut down.
     pub async fn stop(&self) -> Result<(), Error> {
         self.promise.lock().await.clear();
         self.write_half.lock().await.shutdown().await?;
