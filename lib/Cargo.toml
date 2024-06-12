@@ -27,7 +27,7 @@ features = ["remote"]
 
 [features]
 default = ["all"]
-all = ["remote", "tokio"]
+all = ["remote", "tokio/io-util", "tokio/sync", "tokio/rt", "tokio/rt-multi-thread" ,"tokio/macros", "tokio/tokio-macros", "tokio/signal", "tokio/time"]
 remote = ["tokio/net", "bincode"]
 
 
