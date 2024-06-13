@@ -25,50 +25,66 @@ Cargo.toml
 
 ```toml
 [dependencies]
-gabriel2 = { version = "1.1.0", features = ["remote"] }
+gabriel2 = { version = "1.2.0", features = ["remote"] }
 ```
 
 echo.rs
 
 ```rust
-#[derive(Debug)]
-pub struct Echo;
+use std::sync::Arc;
+use gabriel2::*;
+
+use bincode::{Decode, Encode};
+use derive_more::{Display, Error};
+
 
 #[derive(Debug)]
-pub enum Message {
+pub struct EchoActor;
+
+#[derive(Debug)]
+pub enum EchoMessage {
     Ping,
 }
 
 #[derive(Debug)]
-pub enum Response {
+pub enum EchoResponse {
     Pong {counter: u32},
 }
 
 #[derive(Debug,Clone)]
-pub struct State {
+pub struct EchoState {
     pub counter: u32,
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Display, Error)]
 pub enum EchoError {
-    #[error("unknown error")]
+    #[display(fmt = "Unknown error")]
     Unknown,
-    #[error("std::io::Error")]
-    StdErr(#[from] std::io::Error),
 }
 
-#[async_trait]
-impl Handler<Echo, Message, State, Response, EchoError> for Echo {
-    async fn receive(&self, ctx: Arc<Context<Echo, Message, State, Response, EchoError>>) -> Result<Response, EchoError> {
+impl From<std::io::Error> for EchoError {
+    fn from(_err: std::io::Error) -> Self {
+        EchoError::Unknown
+    }
+}
+
+impl Handler for EchoActor {
+    type Actor = EchoActor;
+    type Message = EchoMessage;
+    type State = EchoState;
+    type Response = EchoResponse;
+    type Error = EchoError;
+
+    async fn receive(&self, ctx: Arc<Context<Self::Actor, Self::Message, Self::State, Self::Response, Self::Error>>) -> Result<EchoResponse, EchoError> {
         match ctx.mgs {
-            Message::Ping => {
+            EchoMessage::Ping => {
                 println!("Received Ping");
                 let mut state_lock = ctx.state.lock().await;
                 state_lock.counter += 1;
                 if state_lock.counter > 10 {
                     Err(EchoError::Unknown)
                 } else {
-                    Ok(Response::Pong{counter: state_lock.counter})
+                    Ok(EchoResponse::Pong{counter: state_lock.counter})
                 }
             }
         }
@@ -81,17 +97,17 @@ main.rs
 ```rust
 #[tokio::main]
 async fn main() -> Result<(), EchoError> {
-    let state = State {
+    let state = EchoState {
         counter: 0,
     };
 
-    let echo_ref = ActorRef::new("echo", Echo{},  state, 100000).await?;
+    let echo_ref = ActorRef::new("echo", EchoActor {}, state, 100000).await?;
 
     println!("Sent Ping");
-    echo_ref.send(Message::Ping).await?;
+    echo_ref.send(EchoMessage::Ping).await?;
 
     println!("Sent Ping and ask response");
-    let pong = echo_ref.ask(Message::Ping).await?;
+    let pong = echo_ref.ask(EchoMessage::Ping).await?;
     println!("Got {:?}", pong);
 
     _ = echo_ref.stop().await;
@@ -116,50 +132,32 @@ Example sources: https://github.com/igumnoff/gabriel2/tree/main/test
 
 Preparations for remote:
 
-Add Encode, Decode from "bincode" to derive(..) for Message, Response, State
+Add Encode, Decode from "bincode" to derive(..) for EchoActor, EchoMessage, EchoResponse, EchoState and EchoError
 
-Change EchoError
-```rust
-use derive_more::{Display, Error};
-use bincode::{Decode, Encode};
-
-#[derive(Debug, Display, Error,  Encode, Decode)]
-pub enum EchoError {
-    #[display(fmt = "Unknown error")]
-    Unknown,
-}
-
-impl From<std::io::Error> for EchoError {
-    fn from(_err: std::io::Error) -> Self {
-        EchoError::Unknown
-    }
-}
-```
 Remote version:
 
 ```rust
 #[tokio::main]
 async fn main() -> Result<(), EchoError> {
-    let state = State {
+    let state = EchoState {
         counter: 0,
     };
-    let echo_ref = ActorRef::new("echo", crate::echo::Echo {}, state, 100000).await?;
 
+    let echo_ref = ActorRef::new("echo".to_string(), crate::echo::EchoActor {}, state, 100000).await?;
     let echo_server = ActorServer::new("echo_server", "127.0.0.1", 9001, echo_ref).await?;
-
-    let echo_client: Arc<ActorClient<Echo, Message, State, Response, EchoError >> = ActorClient::new("echo_client", "127.0.0.1", 9001).await?;
+    let echo_client: Arc<ActorClient<EchoActor, EchoMessage, EchoState, EchoResponse, EchoError >> = ActorClient::new("echo_client", "127.0.0.1", 9001).await?;
 
     println!("Sent Ping");
-    echo_client.send(Message::Ping).await?;
+    echo_client.send(EchoMessage::Ping).await?;
 
     println!("Sent Ping and ask response");
-    let pong = echo_client.ask(Message::Ping).await?;
+    let pong = echo_client.ask(EchoMessage::Ping).await?;
     println!("Got {:?}", pong);
 
-    tokio::time::sleep(Duration::from_secs(1)).await;
     _ = echo_client.stop().await;
     _ = echo_server.stop().await;
     Ok(())
+
 }
 ```
 
