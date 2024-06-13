@@ -2,8 +2,8 @@
 // #![doc = include_str!("../README.md")]
 //!
 
-// #[cfg(feature = "remote")]
-// pub mod remote;
+#[cfg(feature = "remote")]
+pub mod remote;
 
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -12,6 +12,9 @@ use std::sync::{Arc};
 use tokio::sync::{mpsc, oneshot};
 use futures::lock::{Mutex};
 use tokio::sync::oneshot::Sender;
+
+pub trait SSSD: Send + Sync + Debug +  'static {}
+impl<S> SSSD for S where S: Send + Sync + Debug + 'static {}
 
 
 /// The `ActorRef` struct represents a reference to an actor in the Actorlib framework.
@@ -101,11 +104,11 @@ pub struct Context<Actor, Message, State, Response, Error> {
 /// - `pre_start`: This method is called before the actor starts. It takes the state of the actor and a reference to the actor itself, and returns a `Future` that resolves to a `Result`. If the `Result` is `Ok`, the actor starts; if it is `Err`, the actor does not start. By default, this method returns `Ok(())`.
 /// - `pre_stop`: This method is called before the actor stops. It takes the state of the actor and a reference to the actor itself, and returns a `Future` that resolves to a `Result`. If the `Result` is `Ok`, the actor stops; if it is `Err`, the actor does not stop. By default, this method returns `Ok(())`.
 pub trait Handler {
-    type Actor: Sync + Send + Debug + 'static;
-    type Message: Sync + Send + Debug + 'static;
-    type State: Sync + Send + Debug + 'static;
-    type Response: Sync + Send + Debug + 'static;
-    type Error: Sync + Send + Debug + std::error::Error + From<std::io::Error>+ 'static;
+    type Actor: SSSD;
+    type Message: SSSD;
+    type State: SSSD;
+    type Response: SSSD;
+    type Error: SSSD + std::error::Error + From<std::io::Error>;
 
     fn receive(&self, ctx: Arc<Context<Self::Actor, Self::Message, Self::State, Self::Response, Self::Error>>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send ;
     fn pre_start(&self, _state: Arc<Mutex<Self::State>>, _self_ref: Arc<ActorRef<Self::Actor, Self::Message, Self::State, Self::Response, Self::Error>>) -> impl Future<Output = Result<(), Self::Error>> {
@@ -121,9 +124,9 @@ pub trait Handler {
 }
 
 pub trait ActorTrait {
-    type Message: Sync + Send + Debug + 'static;
-    type Response: Sync + Send + Debug + 'static;
-    type Error: Sync + Send + Debug + std::error::Error + From<std::io::Error>+ 'static;
+    type Message: SSSD;
+    type Response: SSSD;
+    type Error: SSSD + std::error::Error + From<std::io::Error>;
 
     fn ask(&self, msg: Self::Message) -> impl Future<Output = Result<Self::Response, Self::Error>>;
     fn send(&self, msg: Self::Message) -> impl Future<Output = Result<(), std::io::Error>>;
@@ -133,20 +136,17 @@ pub trait ActorTrait {
 
 
 pub trait ActorRefTrait {
-    type Actor:  Handler + Sync + Send + Debug + 'static;
-    type Message: Sync + Send + Debug + 'static;
-    type State: Sync + Send + Debug + 'static;
-    type Response: Sync + Send + Debug + 'static;
-    type Error: Sync + Send + Debug + std::error::Error + From<std::io::Error>+ 'static;
+    type Actor:  Handler + SSSD;
+    type State: SSSD;
+    type Error: SSSD + std::error::Error + From<std::io::Error>;
 
     fn new(name: impl AsRef<str>, actor: Self::Actor, state: Self::State, buffer: usize) -> impl Future<Output = Result<Arc<Self>, Self::Error>>;
     fn state(&self) -> impl Future<Output = Result<Arc<Mutex<Self::State>>, std::io::Error>>;
 }
 
 
-impl <Actor: Handler<Actor = Actor, State = State, Message = Message, Error = Error, Response = Response>,
-    Message: Sync + Send + Debug + 'static, State:  Sync + Send + Debug + 'static, Response:  Sync + Send + Debug + 'static,
-    Error: Sync + Send + Debug + std::error::Error + From<std::io::Error>+ 'static> ActorTrait for ActorRef<Actor, Message, State, Response, Error> {
+impl <Actor: Handler<Actor = Actor, State = State, Message = Message, Error = Error, Response = Response> + SSSD,
+    Message: SSSD, State: SSSD, Response:  SSSD, Error: SSSD + std::error::Error + From<std::io::Error>> ActorTrait for ActorRef<Actor, Message, State, Response, Error> {
     type Message = Message;
     type Response = Response;
     type Error = Error;
@@ -302,13 +302,10 @@ impl <Actor: Handler<Actor = Actor, State = State, Message = Message, Error = Er
     }
 }
 
-impl <Actor: Handler<Actor = Actor, State = State, Message = Message, Error = Error, Response = Response> + Sync + Send + Debug + 'static , Message: Sync + Send + Debug + 'static,
-    State:  Sync + Send + Debug + 'static, Response:  Sync + Send + Debug + 'static,
-    Error: Sync + Send + Debug + std::error::Error + From<std::io::Error>+ 'static>  ActorRefTrait for ActorRef<Actor, Message, State, Response, Error> {
+impl <Actor: Handler<Actor = Actor, State = State, Message = Message, Error = Error, Response = Response> + SSSD , Message: SSSD,
+    State: SSSD, Response:  SSSD, Error: SSSD + std::error::Error + From<std::io::Error>> ActorRefTrait for ActorRef<Actor, Message, State, Response, Error> {
     type Actor = Actor;
-    type Message = Message;
     type State = State;
-    type Response = Response;
     type Error = Error;
 
     /// Creates a new `ActorRef` instance.
