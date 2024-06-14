@@ -2,6 +2,7 @@ mod echo;
 
 use gabriel2::*;
 use echo::*;
+
 #[tokio::main]
 async fn main() -> Result<(), EchoError> {
     let state = EchoState {
@@ -29,9 +30,7 @@ mod tests {
     use gabriel2::*;
     use gabriel2::sink_stream::{ActorSink, ActorSinkStreamTrait};
     use gabriel2::sink_stream::ActorSinkTrait;
-
     use crate::echo::{EchoActor, EchoError, EchoMessage, EchoResponse, EchoState};
-
 
     #[tokio::test]
     async fn test_remote() -> anyhow::Result<()> {
@@ -93,6 +92,72 @@ mod tests {
         Ok(())
     }
 
+
+    #[derive(Debug, Copy, Clone)]
+    enum EventElement {
+        Fire,
+        Water
+    }
+
+    impl Event for EventElement {}
+
+
+    #[tokio::test]
+    async fn check_subscription() -> anyhow::Result<()> {
+        let event_bus: Arc<EventBus<EventElement>> = Arc::new(EventBus::new());
+        let subscriber_id = event_bus.subscribe(move |event| {
+            let otp = match event {
+                EventElement::Fire => "1",
+                EventElement::Water => "2"
+            };
+            println!("{}", otp);
+        }).await;
+
+        event_bus.publish(EventElement::Fire).await;
+        event_bus.publish(EventElement::Fire).await;
+        event_bus.publish(EventElement::Water).await;
+
+        event_bus.publish(EventElement::Fire).await;
+        event_bus.run().await;
+        event_bus.unsubscribe(subscriber_id).await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn actor_event_bus_test() {
+        let event_bus: Arc<EventBus<EventElement>> = Arc::new(EventBus::new());
+        let state = EchoState {
+            counter: 0,
+        };
+        let echo_ref = Arc::new(ActorRef::new("echo".to_string(), crate::echo::EchoActor {}, state, 100000).await.unwrap());
+
+        let e = echo_ref.clone();
+
+        let subscriber_id = event_bus.subscribe(move |event| {
+            match event {
+                EventElement::Fire => {
+                    futures::executor::block_on(
+                        e.send(EchoMessage::Ping)
+                    ).unwrap();
+                },
+                _ => ()
+            }
+        }).await;
+
+        event_bus.publish(EventElement::Fire).await;
+        event_bus.publish(EventElement::Fire).await;
+        event_bus.publish(EventElement::Water).await;
+        event_bus.publish(EventElement::Fire).await;
+        event_bus.run().await;
+        event_bus.unsubscribe(subscriber_id).await; // <- FIXME: This thing executing not conseqentualy, and i dunno is it bug or feature xd.
+
+
+        let state = if let Ok(EchoResponse::Pong {counter}) = echo_ref.ask(EchoMessage::Ping).await {
+            counter
+        } else {0};
+
+        assert_eq!(state, 4) // why is state = 4 ;-;
+    }
 
 }
 
