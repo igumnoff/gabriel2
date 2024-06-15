@@ -13,21 +13,20 @@ readme = "../README.md"
 description = "Gabriel2: Indeed, an actor library based on Tokio, written in Rust"
 
 
-
 [dependencies]
 futures = "0.3.26"
 log = "0.4.17"
 tokio = { version = "1.25.0", optional = true }
-
+async-trait = { version = "0.1.80", optional = true }
 bincode = { version = "2.0.0-rc.3", optional = true }
 async-stream = "0.3.5"
 
 [package.metadata.docs.rs]
-features = ["remote", "sink-stream"]
+features = ["remote", "broadcast", "sink-stream"]
 
 [features]
 default = ["all"]
-all = ["remote", "sink-stream", "tokio/io-util", "tokio/sync", "tokio/rt", "tokio/rt-multi-thread" ,"tokio/macros", "tokio/tokio-macros", "tokio/signal", "tokio/time"]
+all = ["remote", "broadcast", "tokio/io-util", "tokio/sync", "tokio/rt", "tokio/rt-multi-thread", "tokio/macros", "tokio/tokio-macros", "tokio/signal", "tokio/time"]
 remote = ["tokio/net", "bincode"]
 sink-stream = []
-
+broadcast = ["tokio/sync", "tokio/rt", "async-trait"]

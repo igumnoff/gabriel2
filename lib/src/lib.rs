@@ -7,13 +7,15 @@ pub mod remote;
 
 #[cfg(feature = "sink-stream")]
 pub mod sink_stream;
+#[cfg(feature = "broadcast")]
+pub mod broadcast;
 
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::future::Future;
-use std::sync::{Arc, atomic::{AtomicUsize, Ordering}};
+use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
-use futures::lock::{Mutex};
+use futures::lock::Mutex;
 use tokio::sync::oneshot::Sender;
 
 pub trait SSSD: Send + Sync + Debug +  'static {}
@@ -455,102 +457,3 @@ impl <Actor: Handler<Actor = Actor, State = State, Message = Message, Error = Er
 }
 
 
-/// Marker-trait for events
-pub trait Event: Copy + Clone + Debug {}
-
-/// `EventCallback` is a marker-trait for callback which will be stored in subscribers
-/// Auto-implemented
-pub trait EventCallback<T>: Fn(T) -> () + 'static  {}
-
-impl<T, F> EventCallback<T> for F
-    where F: Fn(T) -> () + 'static,
-          T: Event
-{}
-
-
-/// # Event Bus
-///
-/// `EventBus<E,R>`, where `E` implements `Event` marker trait `R` `implements EventCallback<E>`
-///
-/// `EventBus` accessible from all actors
-///
-/// ## Fields
-///
-/// * `subscribers` - HashMap that contains id of subsriber and tuple of (Event, Callback) which is executes on event (Variant of `E`)
-///
-/// * `events`      - Vector of all events
-///
-/// ## Methods
-///
-/// * `new` - Creating new instance of `EventBus`
-///
-/// * `publish` - Sends an event to a `events`
-///
-/// * `subscribe` - Creates record in `subscribers` of enum variant and callback to that variant and returns subscriber's id
-///
-/// * `unsubscribe` - Remove record from `subscribers`
-///
-/// * `run` - run through each event and execute callbacks
-///
-pub struct EventBus<E>
-where E: Event
-{
-    subscribers: Arc<Mutex<HashMap<usize, Box<dyn EventCallback<E>>>>>,
-    events:      Arc<Mutex<Vec<E>>>,
-    counter:     AtomicUsize
-}
-
-impl<E> EventBus<E>
-    where E: Event,
-{
-    pub fn new() -> Self {
-        Self {
-            subscribers: Arc::new(Mutex::new(HashMap::new())),
-            events: Arc::new(Mutex::new(Vec::new())),
-            counter: AtomicUsize::new(0)
-        }
-    }
-
-    pub async fn publish(&self, event: E) {
-        // XXX: Hope that futures::sync::Mutex is safe for multi-threading
-        let mut events = self.events.lock().await;
-        events.push(event);
-        log::trace!("New event in event bus: {:?}", event);
-    }
-
-    pub async fn subscribe<F>(&self, callback: F) -> usize
-        where F: EventCallback<E> + 'static
-    {
-        let mut subscribers = self.subscribers.lock().await;
-        let id = self.counter.fetch_add(1, Ordering::SeqCst);
-        subscribers.insert(id, Box::new(callback));
-        log::trace!("New subscriber in event bus. id: {}", id);
-        id
-    }
-
-    pub async fn unsubscribe(&self, subscriber_id: usize) {
-        let mut subscribers = self.subscribers.lock().await;
-        subscribers.remove(&subscriber_id);
-        log::trace!("Removed subscriber in event bus. id: {}", subscriber_id);
-    }
-
-    pub async fn run(&self) {
-        let mut events = self.events.lock().await;
-        let subscribers = &*self.subscribers.lock().await;
-
-        log::trace!("Event bus is running");
-        for event in events.drain(..) {
-            for (_id, callback) in subscribers {
-                callback(event);
-            }
-        }
-    }
-}
-
-// impl<E> Default for EventBus<E>
-//     where E: Event,
-// {
-//     fn default() -> Self {
-//         Self::new()
-//     }
-// }
