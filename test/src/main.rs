@@ -89,8 +89,6 @@ mod tests {
         echo_stream.for_each(|message| async move {
             println!("Got {:?}", message.unwrap());
         }).await;
-
-
         tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
         Ok(())
     }
