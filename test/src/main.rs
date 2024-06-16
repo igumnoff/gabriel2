@@ -25,7 +25,7 @@ async fn main() -> Result<(), EchoError> {
 #[cfg(test)]
 mod tests {
     use std::sync::{Arc};
-    use futures::SinkExt;
+    use futures::{StreamExt};
     use gabriel2::*;
     use gabriel2::sink_stream::ActorSink;
     use gabriel2::sink_stream::ActorSinkTrait;
@@ -67,8 +67,9 @@ mod tests {
         };
 
         let echo_ref = ActorRef::new("echo", crate::echo::EchoActor {}, state, 100000).await?;
-        let mut sink_echo = ActorSink::new(echo_ref.clone());
-        let _ = sink_echo.send(EchoMessage::Ping).await;
+        let sink_echo = ActorSink::new(echo_ref.clone());
+        let stream = futures::stream::iter(vec![EchoMessage::Ping, EchoMessage::Ping, EchoMessage::Ping]).map(Ok);
+        _ = stream.forward(sink_echo).await;
         tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
         Ok(())
     }
