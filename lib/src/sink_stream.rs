@@ -6,7 +6,7 @@ use crate::{ActorTrait, Handler};
 use crate::SSSD;
 use crate::ActorRef;
 pub trait ActorSinkTrait {
-    type Actor: SSSD;
+    type Actor: SSSD + Handler;
     type Message: SSSD;
     type State: SSSD;
     type Response: SSSD;
@@ -17,23 +17,22 @@ pub trait ActorSinkTrait {
 }
 
 
-// impl <Actor:SSSD, Message:  SSSD, State: SSSD, Response: SSSD,
-//     Error: SSSD + std::error::Error + From<std::io::Error>> ActorSinkTrait for ActorSink<Actor, Message, State, Response, Error> {
-//     type Actor = Actor;
-//     type Message = Message;
-//     type State = State;
-//     type Response = Response;
-//     type Error = Error;
-//     fn new_sink(actor_ref: ActorRef<Self::Actor, Self::Message, Self::State, Self::Response, Self::Error>) -> impl Sink<Self::Message, Error=Self::Error>
-//         where ActorRef<Self::Actor, Self::Message, Self::State, Self::Response, Self::Error>: ActorTrait
-//     {
-//         ActorSink {
-//             actor_ref
-//         }
-//     }
-// }
+impl <Actor: Handler<Actor = Actor, Message = Message, State = State,Response = Response, Error = Error> + SSSD, Message: SSSD, State: SSSD, Response: SSSD, Error:SSSD + std::error::Error + From<std::io::Error>> ActorSinkTrait for ActorSink<Actor, Message, State, Response, Error> {
+    type Actor = Actor;
+    type Message = Message;
+    type State = State;
+    type Response = Response;
+    type Error = Error;
+    fn new_sink(actor_ref: ActorRef<Self::Actor, Self::Message, Self::State, Self::Response, Self::Error>) -> impl Sink<Self::Message, Error=Self::Error>
+        where ActorRef<Self::Actor, Self::Message, Self::State, Self::Response, Self::Error>: ActorTrait
+    {
+        ActorSink {
+            actor_ref
+        }
+    }
+}
 
-struct ActorSink<Actor, Message, State, Response, Error>
+pub struct ActorSink<Actor, Message, State, Response, Error>
     where ActorRef<Actor, Message, State, Response, Error>: ActorTrait{
     actor_ref: ActorRef<Actor, Message, State, Response, Error>
 }

@@ -26,6 +26,8 @@ async fn main() -> Result<(), EchoError> {
 mod tests {
     use std::sync::{Arc};
     use gabriel2::*;
+    use gabriel2::sink_stream::ActorSink;
+    use gabriel2::sink_stream::ActorSinkTrait;
 
     use crate::echo::{EchoActor, EchoError, EchoMessage, EchoResponse, EchoState};
 
@@ -55,6 +57,21 @@ mod tests {
         Ok(())
     }
 
+    #[tokio::test]
+    async fn test_sink() -> anyhow::Result<()> {
+        use gabriel2::remote::*;
+        // let _ = env_logger::Builder::from_env(env_logger::Env::new().default_filter_or("trace")).try_init();
+
+        let state = EchoState {
+            counter: 0,
+        };
+
+        let echo_ref = ActorRef::new("echo".to_string(), crate::echo::EchoActor {}, state, 100000).await?;
+        // let sink_echo = ActorSink::new_sink(echo_ref.clone());
+
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+        Ok(())
+    }
 
 }
 
