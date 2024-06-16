@@ -1,8 +1,10 @@
+use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
+use async_stream::__private::AsyncStream;
 use futures::sink::Sink;
-use futures::stream::Stream;
+use tokio::sync::mpsc::Sender;
 use crate::{ActorTrait, Handler};
 use crate::SSSD;
 use crate::ActorRef;
@@ -74,18 +76,15 @@ pub trait ActorSinkStreamTrait {
     type Response: SSSD;
     type Error: SSSD + std::error::Error + From<std::io::Error>;
     fn sink_stream(actor_ref: Arc<ActorRef<Self::Actor, Self::Message, Self::State, Self::Response, Self::Error>>)
-            -> (impl Sink<Self::Message, Error=Self::Error>, impl Stream<Item = Self::Message>)
+            -> (impl Sink<Self::Message, Error=Self::Error>, AsyncStream<Self::Response, impl Future<Output =()> + Sized>)
         where ActorRef<Self::Actor, Self::Message, Self::State, Self::Response, Self::Error>: ActorTrait;
 }
 
-pub struct ActorSinkStream<Actor, Message, State, Response, Error>
-    where ActorRef<Actor, Message, State, Response, Error>: ActorTrait{
-    actor_ref: Arc<ActorRef<Actor, Message, State, Response, Error>>
-}
 
 pub struct ActorSinkAsk<Actor, Message, State, Response, Error>
     where ActorRef<Actor, Message, State, Response, Error>: ActorTrait{
-    actor_ref: Arc<ActorRef<Actor, Message, State, Response, Error>>
+    actor_ref: Arc<ActorRef<Actor, Message, State, Response, Error>>,
+    tx: Sender<Response>
 }
 
 
@@ -100,8 +99,10 @@ impl <Actor:Handler<Actor = Actor, State = State, Message = Message, Response = 
     fn start_send(self: Pin<&mut Self>, item: Message) -> Result<(), Error> {
         let handle = tokio::runtime::Handle::current();
         let reference = self.actor_ref.clone();
+        let tx = self.tx.clone();
         handle.spawn(async move {
             let response = reference.ask(item).await;
+            tx.send(response.unwrap()).await.unwrap();
         });
         Ok(())
     }
@@ -122,7 +123,8 @@ impl <Actor: Handler<Actor = Actor, Message = Message, State = State,Response = 
     type State = State;
     type Response = Response;
     type Error = Error;
-    fn sink_stream(actor_ref: Arc<ActorRef<Self::Actor, Self::Message, Self::State, Self::Response, Self::Error>>) -> (impl Sink<Self::Message, Error=Self::Error>, impl Stream<Item=Self::Message>)
+    fn sink_stream(actor_ref: Arc<ActorRef<Self::Actor, Self::Message, Self::State, Self::Response, Self::Error>>)
+        -> (impl Sink<Self::Message, Error=Self::Error>, AsyncStream<Self::Response, impl Future<Output =()> + Sized>)
         where ActorRef<Self::Actor, Self::Message, Self::State, Self::Response, Self::Error>: ActorTrait {
 
 
@@ -138,24 +140,11 @@ impl <Actor: Handler<Actor = Actor, Message = Message, State = State,Response = 
 
         (
             ActorSinkAsk {
-                actor_ref: actor_ref.clone()
+                actor_ref: actor_ref.clone(),
+                tx
             },
-            ActorSinkStream {
-                actor_ref: actor_ref.clone()
-            }
+            stream
         )
     }
 }
 
-impl <Actor:Handler<Actor = Actor, State = State, Message = Message, Response = Response, Error = Error> + SSSD,
-    Message: SSSD, State: SSSD, Response: SSSD, Error: SSSD + std::error::Error + From<std::io::Error>> Stream for ActorSinkStream<Actor, Message, State, Response, Error> {
-    type Item = Message;
-
-    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        todo!()
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        todo!()
-    }
-}
