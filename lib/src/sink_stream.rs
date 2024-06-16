@@ -34,9 +34,7 @@ pub trait ActorSinkTrait {
 // }
 
 struct ActorSink<Actor, Message, State, Response, Error>
-    where ActorRef<Actor, Message, State, Response, Error>: ActorTrait,
-    Error: SSSD + std::error::Error + From<std::io::Error>,
-{
+    where ActorRef<Actor, Message, State, Response, Error>: ActorTrait{
     actor_ref: ActorRef<Actor, Message, State, Response, Error>
 }
 
@@ -45,33 +43,33 @@ impl <Actor:Handler<Actor = Actor, State = State, Message = Message, Response = 
     State: SSSD, Response: SSSD, Error: SSSD + std::error::Error + From<std::io::Error>> Sink<Message> for ActorSink<Actor, Message, State, Response, Error> {
     type Error = Error;
 
-    fn poll_ready(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
+    fn poll_ready(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
         Poll::Ready(Ok(()))
     }
 
     fn start_send(self: Pin<&mut Self>, item: Message) -> Result<(), Error> {
         let handle = tokio::runtime::Handle::current();
         handle.block_on(async {
-            self.actor_ref.send(item).await;
+            let _ = self.actor_ref.send(item).await;
         });
         Ok(())
     }
 
-    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
+    fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
         Poll::Ready(Ok(()))
     }
 
-    fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
+    fn poll_close(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
         Poll::Ready(Ok(()))
     }
 }
-//
-// pub trait ActorSinkStream {
-//     type Actor:  Handler + SSSD;
-//     type Message: SSSD;
-//     type State: SSSD;
-//     type Response: SSSD;
-//     type Error: SSSD + std::error::Error + From<std::io::Error>;
-//     fn new_sink_stream(&self) -> (impl Sink<Self::Message, Error=Self::Error>, impl Stream<Item=Self::Response>);
-// }
+
+pub trait ActorSinkStream {
+    type Actor:  Handler + SSSD;
+    type Message: SSSD;
+    type State: SSSD;
+    type Response: SSSD;
+    type Error: SSSD + std::error::Error + From<std::io::Error>;
+    fn new_sink_stream(&self) -> (impl Sink<Self::Message, Error=Self::Error>, impl Stream<Item=Self::Response>);
+}
 
