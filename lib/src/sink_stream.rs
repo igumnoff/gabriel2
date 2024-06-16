@@ -127,7 +127,6 @@ impl <Actor: Handler<Actor = Actor, Message = Message, State = State,Response = 
         -> (impl Sink<Self::Message, Error=Self::Error>, AsyncStream<Self::Response, impl Future<Output =()> + Sized>)
         where ActorRef<Self::Actor, Self::Message, Self::State, Self::Response, Self::Error>: ActorTrait {
 
-
         use tokio::sync::mpsc;
 
         let (tx, mut rx) = mpsc::channel::<Self::Response>(10000);
