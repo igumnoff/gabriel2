@@ -22,11 +22,11 @@ tokio = { version = "1.25.0", optional = true }
 bincode = { version = "2.0.0-rc.3", optional = true }
 
 [package.metadata.docs.rs]
-features = ["remote"]
+features = ["remote", "sink_stream"]
 
 [features]
 default = ["all"]
-all = ["remote", "tokio/io-util", "tokio/sync", "tokio/rt", "tokio/rt-multi-thread" ,"tokio/macros", "tokio/tokio-macros", "tokio/signal", "tokio/time"]
+all = ["remote", "sink-stream", "tokio/io-util", "tokio/sync", "tokio/rt", "tokio/rt-multi-thread" ,"tokio/macros", "tokio/tokio-macros", "tokio/signal", "tokio/time"]
 remote = ["tokio/net", "bincode"]
-
+sink-stream = []
 
