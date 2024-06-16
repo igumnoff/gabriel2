@@ -87,7 +87,7 @@ mod tests {
         let message_stream = futures::stream::iter(vec![EchoMessage::Ping, EchoMessage::Ping, EchoMessage::Ping]).map(Ok);
         _ = message_stream.forward(echo_sink).await;
         echo_stream.for_each(|message| async move {
-            println!("Got {:?}", message);
+            println!("Got {:?}", message.unwrap());
         }).await;
 
 
