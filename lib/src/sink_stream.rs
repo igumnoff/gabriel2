@@ -19,7 +19,7 @@ pub trait ActorSinkTrait {
 
 
 impl <Actor: Handler<Actor = Actor, Message = Message, State = State,Response = Response, Error = Error> + SSSD,
-    Message: SSSD, State: SSSD, Response: SSSD, Error:SSSD + std::error::Error + From<std::io::Error>> ActorSinkTrait for ActorSinkStream<Actor, Message, State, Response, Error> {
+    Message: SSSD, State: SSSD, Response: SSSD, Error:SSSD + std::error::Error + From<std::io::Error>> ActorSinkTrait for ActorSink<Actor, Message, State, Response, Error> {
     type Actor = Actor;
     type Message = Message;
     type State = State;
@@ -28,20 +28,20 @@ impl <Actor: Handler<Actor = Actor, Message = Message, State = State,Response = 
     fn sink(actor_ref: Arc<ActorRef<Self::Actor, Self::Message, Self::State, Self::Response, Self::Error>>) -> impl Sink<Self::Message, Error=Self::Error>
         where ActorRef<Self::Actor, Self::Message, Self::State, Self::Response, Self::Error>: ActorTrait
     {
-        ActorSinkStream {
+        ActorSink {
             actor_ref
         }
     }
 }
 
-pub struct ActorSinkStream<Actor, Message, State, Response, Error>
+pub struct ActorSink<Actor, Message, State, Response, Error>
     where ActorRef<Actor, Message, State, Response, Error>: ActorTrait{
     actor_ref: Arc<ActorRef<Actor, Message, State, Response, Error>>
 }
 
 
 impl <Actor:Handler<Actor = Actor, State = State, Message = Message, Response = Response, Error = Error> + SSSD, Message: SSSD,
-    State: SSSD, Response: SSSD, Error: SSSD + std::error::Error + From<std::io::Error>> Sink<Message> for ActorSinkStream<Actor, Message, State, Response, Error> {
+    State: SSSD, Response: SSSD, Error: SSSD + std::error::Error + From<std::io::Error>> Sink<Message> for ActorSink<Actor, Message, State, Response, Error> {
     type Error = Error;
 
     fn poll_ready(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Result<(), Error>> {

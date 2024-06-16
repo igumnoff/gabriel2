@@ -27,7 +27,7 @@ mod tests {
     use std::sync::{Arc};
     use futures::{StreamExt};
     use gabriel2::*;
-    use gabriel2::sink_stream::ActorSinkStream;
+    use gabriel2::sink_stream::ActorSink;
     use gabriel2::sink_stream::ActorSinkTrait;
 
     use crate::echo::{EchoActor, EchoError, EchoMessage, EchoResponse, EchoState};
@@ -67,7 +67,7 @@ mod tests {
         };
 
         let echo_ref = ActorRef::new("echo", crate::echo::EchoActor {}, state, 100000).await?;
-        let sink_echo = ActorSinkStream::sink(echo_ref.clone());
+        let sink_echo = ActorSink::sink(echo_ref.clone());
         let stream = futures::stream::iter(vec![EchoMessage::Ping, EchoMessage::Ping, EchoMessage::Ping]).map(Ok);
         _ = stream.forward(sink_echo).await;
         tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
