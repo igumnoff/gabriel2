@@ -83,6 +83,38 @@ pub struct ActorSinkStream<Actor, Message, State, Response, Error>
     actor_ref: Arc<ActorRef<Actor, Message, State, Response, Error>>
 }
 
+pub struct ActorSinkAsk<Actor, Message, State, Response, Error>
+    where ActorRef<Actor, Message, State, Response, Error>: ActorTrait{
+    actor_ref: Arc<ActorRef<Actor, Message, State, Response, Error>>
+}
+
+
+impl <Actor:Handler<Actor = Actor, State = State, Message = Message, Response = Response, Error = Error> + SSSD, Message: SSSD,
+    State: SSSD, Response: SSSD, Error: SSSD + std::error::Error + From<std::io::Error>> Sink<Message> for ActorSinkAsk<Actor, Message, State, Response, Error> {
+    type Error = Error;
+
+    fn poll_ready(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
+        Poll::Ready(Ok(()))
+    }
+
+    fn start_send(self: Pin<&mut Self>, item: Message) -> Result<(), Error> {
+        let handle = tokio::runtime::Handle::current();
+        let reference = self.actor_ref.clone();
+        handle.spawn(async move {
+            let response = reference.ask(item).await;
+        });
+        Ok(())
+    }
+
+    fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
+        Poll::Ready(Ok(()))
+    }
+
+    fn poll_close(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
+        Poll::Ready(Ok(()))
+    }
+}
+
 impl <Actor: Handler<Actor = Actor, Message = Message, State = State,Response = Response, Error = Error> + SSSD,
     Message: SSSD, State: SSSD, Response: SSSD, Error:SSSD + std::error::Error + From<std::io::Error>> ActorSinkStreamTrait for ActorSink<Actor, Message, State, Response, Error> {
     type Actor = Actor;
@@ -93,8 +125,19 @@ impl <Actor: Handler<Actor = Actor, Message = Message, State = State,Response = 
     fn sink_stream(actor_ref: Arc<ActorRef<Self::Actor, Self::Message, Self::State, Self::Response, Self::Error>>) -> (impl Sink<Self::Message, Error=Self::Error>, impl Stream<Item=Self::Message>)
         where ActorRef<Self::Actor, Self::Message, Self::State, Self::Response, Self::Error>: ActorTrait {
 
+
+        use tokio::sync::mpsc;
+
+        let (tx, mut rx) = mpsc::channel::<Self::Response>(10000);
+
+        let stream = async_stream::stream! {
+            while let Some(item) = rx.recv().await {
+                yield item;
+            }
+        };
+
         (
-            ActorSink {
+            ActorSinkAsk {
                 actor_ref: actor_ref.clone()
             },
             ActorSinkStream {
