@@ -12,8 +12,8 @@ pub trait ActorSinkTrait {
     type State: SSSD;
     type Response: SSSD;
     type Error: SSSD + std::error::Error + From<std::io::Error>;
-    fn new_sink(actor_ref: Arc<ActorRef<Self::Actor, Self::Message, Self::State, Self::Response, Self::Error>>)
-        -> impl Sink<Self::Message, Error=Self::Error>
+    fn new(actor_ref: Arc<ActorRef<Self::Actor, Self::Message, Self::State, Self::Response, Self::Error>>)
+           -> impl Sink<Self::Message, Error=Self::Error>
         where ActorRef<Self::Actor, Self::Message, Self::State, Self::Response, Self::Error>: ActorTrait;
 }
 
@@ -25,7 +25,7 @@ impl <Actor: Handler<Actor = Actor, Message = Message, State = State,Response = 
     type State = State;
     type Response = Response;
     type Error = Error;
-    fn new_sink(actor_ref: Arc<ActorRef<Self::Actor, Self::Message, Self::State, Self::Response, Self::Error>>) -> impl Sink<Self::Message, Error=Self::Error>
+    fn new(actor_ref: Arc<ActorRef<Self::Actor, Self::Message, Self::State, Self::Response, Self::Error>>) -> impl Sink<Self::Message, Error=Self::Error>
         where ActorRef<Self::Actor, Self::Message, Self::State, Self::Response, Self::Error>: ActorTrait
     {
         ActorSink {

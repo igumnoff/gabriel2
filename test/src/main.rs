@@ -67,7 +67,7 @@ mod tests {
         };
 
         let echo_ref = ActorRef::new("echo", crate::echo::EchoActor {}, state, 100000).await?;
-        let mut sink_echo = ActorSink::new_sink(echo_ref.clone());
+        let mut sink_echo = ActorSink::new(echo_ref.clone());
         let _ = sink_echo.send(EchoMessage::Ping).await;
         tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
         Ok(())
