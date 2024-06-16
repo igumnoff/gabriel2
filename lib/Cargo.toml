@@ -1,6 +1,6 @@
 [package]
 name = "gabriel2"
-version = "1.2.0"
+version = "1.3.0"
 edition = "2021"
 
 authors = ["Evgeny Igumnov <igumnovnsk@gmail.com>"]
@@ -20,13 +20,14 @@ log = "0.4.17"
 tokio = { version = "1.25.0", optional = true }
 
 bincode = { version = "2.0.0-rc.3", optional = true }
+async-stream = "0.3.5"
 
 [package.metadata.docs.rs]
-features = ["remote"]
+features = ["remote", "sink-stream"]
 
 [features]
 default = ["all"]
-all = ["remote", "tokio/io-util", "tokio/sync", "tokio/rt", "tokio/rt-multi-thread" ,"tokio/macros", "tokio/tokio-macros", "tokio/signal", "tokio/time"]
+all = ["remote", "sink-stream", "tokio/io-util", "tokio/sync", "tokio/rt", "tokio/rt-multi-thread" ,"tokio/macros", "tokio/tokio-macros", "tokio/signal", "tokio/time"]
 remote = ["tokio/net", "bincode"]
-
+sink-stream = []
 

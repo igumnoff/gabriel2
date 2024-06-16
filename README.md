@@ -13,6 +13,8 @@ Gabriel2: Indeed, an actor library based on Tokio, written in Rust
 - [x] Mutable state of actor
 - [x] Self reference in actor from context
 - [x] Actor lifecycle (pre_start, pre_stop)
+- [x] Sink to actor
+- [x] Stream from actor
 - [x] Remote Actor
 
 ## TODO
@@ -25,7 +27,7 @@ Cargo.toml
 
 ```toml
 [dependencies]
-gabriel2 = { version = "1.2.0", features = ["remote"] }
+gabriel2 = { version = "1.3.0", features = ["remote", "sink-stream"] }
 ```
 
 echo.rs
@@ -127,6 +129,63 @@ Got Pong { counter: 2 }
 
 Example sources: https://github.com/igumnoff/gabriel2/tree/main/test
 
+
+## Sink
+
+```rust
+#[tokio::main]
+async fn main() -> Result<(), EchoError> {
+    let state = EchoState {
+        counter: 0,
+    };
+
+    let echo_ref = ActorRef::new("echo", crate::echo::EchoActor {}, state, 100000).await?;
+    let echo_sink = ActorSink::sink(echo_ref.clone());
+    let message_stream = futures::stream::iter(vec![EchoMessage::Ping, EchoMessage::Ping, EchoMessage::Ping]).map(Ok);
+    _ = message_stream.forward(echo_sink).await;
+    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+     Ok(())
+}
+```
+
+Example output:
+```
+Received Ping
+Received Ping
+Received Ping
+```
+
+### Stream
+
+```rust
+#[tokio::main]
+async fn main() -> Result<(), EchoError> {
+    let state = EchoState {
+        counter: 0,
+    };
+
+    let echo_ref = ActorRef::new("echo", crate::echo::EchoActor {}, state, 100000).await?;
+    let (echo_sink, echo_stream) = ActorSink::sink_stream(echo_ref.clone());
+    let message_stream = futures::stream::iter(vec![EchoMessage::Ping, EchoMessage::Ping, EchoMessage::Ping]).map(Ok);
+    _ = message_stream.forward(echo_sink).await;
+    echo_stream.for_each(|message| async move {
+        println!("Got {:?}", message.unwrap());
+    }).await;
+    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+
+    Ok(())
+}
+```
+Example output:
+
+```
+Received Ping
+Received Ping
+Received Ping
+Got Pong { counter: 1 }
+Got Pong { counter: 2 }
+Got Pong { counter: 3 }
+```
 
 ## Remote 
 

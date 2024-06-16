@@ -5,6 +5,9 @@
 #[cfg(feature = "remote")]
 pub mod remote;
 
+#[cfg(feature = "sink-stream")]
+pub mod sink_stream;
+
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::future::Future;
