@@ -25,6 +25,7 @@ async fn main() -> Result<(), EchoError> {
 #[cfg(test)]
 mod tests {
     use std::sync::{Arc};
+    use futures::SinkExt;
     use gabriel2::*;
     use gabriel2::sink_stream::ActorSink;
     use gabriel2::sink_stream::ActorSinkTrait;
@@ -41,7 +42,7 @@ mod tests {
             counter: 0,
         };
 
-        let echo_ref = ActorRef::new("echo".to_string(), crate::echo::EchoActor {}, state, 100000).await?;
+        let echo_ref = ActorRef::new("echo", crate::echo::EchoActor {}, state, 100000).await?;
         let echo_server = ActorServer::new("echo_server", "127.0.0.1", 9001, echo_ref).await?;
         let echo_client: Arc<ActorClient<EchoActor, EchoMessage, EchoState, EchoResponse, EchoError >> = ActorClient::new("echo_client", "127.0.0.1", 9001).await?;
 
@@ -59,16 +60,15 @@ mod tests {
 
     #[tokio::test]
     async fn test_sink() -> anyhow::Result<()> {
-        use gabriel2::remote::*;
         // let _ = env_logger::Builder::from_env(env_logger::Env::new().default_filter_or("trace")).try_init();
 
         let state = EchoState {
             counter: 0,
         };
 
-        let echo_ref = ActorRef::new("echo".to_string(), crate::echo::EchoActor {}, state, 100000).await?;
-        // let sink_echo = ActorSink::new_sink(echo_ref.clone());
-
+        let echo_ref = ActorRef::new("echo", crate::echo::EchoActor {}, state, 100000).await?;
+        let mut sink_echo = ActorSink::new_sink(echo_ref.clone());
+        let _ = sink_echo.send(EchoMessage::Ping).await;
         tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
         Ok(())
     }

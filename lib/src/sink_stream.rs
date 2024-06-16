@@ -1,4 +1,5 @@
 use std::pin::Pin;
+use std::sync::Arc;
 use std::task::{Context, Poll};
 use futures::sink::Sink;
 use futures::stream::Stream;
@@ -11,19 +12,20 @@ pub trait ActorSinkTrait {
     type State: SSSD;
     type Response: SSSD;
     type Error: SSSD + std::error::Error + From<std::io::Error>;
-    fn new_sink(actor_ref: ActorRef<Self::Actor, Self::Message, Self::State, Self::Response, Self::Error>)
+    fn new_sink(actor_ref: Arc<ActorRef<Self::Actor, Self::Message, Self::State, Self::Response, Self::Error>>)
         -> impl Sink<Self::Message, Error=Self::Error>
         where ActorRef<Self::Actor, Self::Message, Self::State, Self::Response, Self::Error>: ActorTrait;
 }
 
 
-impl <Actor: Handler<Actor = Actor, Message = Message, State = State,Response = Response, Error = Error> + SSSD, Message: SSSD, State: SSSD, Response: SSSD, Error:SSSD + std::error::Error + From<std::io::Error>> ActorSinkTrait for ActorSink<Actor, Message, State, Response, Error> {
+impl <Actor: Handler<Actor = Actor, Message = Message, State = State,Response = Response, Error = Error> + SSSD,
+    Message: SSSD, State: SSSD, Response: SSSD, Error:SSSD + std::error::Error + From<std::io::Error>> ActorSinkTrait for ActorSink<Actor, Message, State, Response, Error> {
     type Actor = Actor;
     type Message = Message;
     type State = State;
     type Response = Response;
     type Error = Error;
-    fn new_sink(actor_ref: ActorRef<Self::Actor, Self::Message, Self::State, Self::Response, Self::Error>) -> impl Sink<Self::Message, Error=Self::Error>
+    fn new_sink(actor_ref: Arc<ActorRef<Self::Actor, Self::Message, Self::State, Self::Response, Self::Error>>) -> impl Sink<Self::Message, Error=Self::Error>
         where ActorRef<Self::Actor, Self::Message, Self::State, Self::Response, Self::Error>: ActorTrait
     {
         ActorSink {
@@ -34,7 +36,7 @@ impl <Actor: Handler<Actor = Actor, Message = Message, State = State,Response = 
 
 pub struct ActorSink<Actor, Message, State, Response, Error>
     where ActorRef<Actor, Message, State, Response, Error>: ActorTrait{
-    actor_ref: ActorRef<Actor, Message, State, Response, Error>
+    actor_ref: Arc<ActorRef<Actor, Message, State, Response, Error>>
 }
 
 
@@ -48,8 +50,9 @@ impl <Actor:Handler<Actor = Actor, State = State, Message = Message, Response = 
 
     fn start_send(self: Pin<&mut Self>, item: Message) -> Result<(), Error> {
         let handle = tokio::runtime::Handle::current();
-        handle.block_on(async {
-            let _ = self.actor_ref.send(item).await;
+        let reference = self.actor_ref.clone();
+        handle.spawn(async move {
+            let _ = reference.send(item).await;
         });
         Ok(())
     }
