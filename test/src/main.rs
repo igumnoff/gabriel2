@@ -118,53 +118,80 @@ mod tests {
         event_bus.publish(EventElement::Water).await?;
         event_bus.publish(EventElement::Fire).await?;
         event_bus.publish(EventElement::Water).await?;
+        event_bus.unsubscribe(subscriber_id);
+
         let subscriber_id = event_bus.subscribe(|event| async move {
             let otp = match event {
-                EventElement::Fire => "1",
-                EventElement::Water => "2"
+                EventElement::Fire => "Y",
+                EventElement::Water => "N"
             };
             println!("{}", otp);
         }).await;
 
         event_bus.publish(EventElement::Fire).await?;
         event_bus.publish(EventElement::Water).await?; // FIXME: subscribers will see only last publish.
-        // tokio::time::sleep(tokio::time::Duration::from_millis(10000)).await;
+        let subscriber_id = event_bus.subscribe(|event| async move {
+            let otp = match event {
+                EventElement::Fire => "YY",
+                EventElement::Water => "NN"
+            };
+            println!("{}", otp);
+        }).await;
+
+        event_bus.publish(EventElement::Fire).await?;
+        event_bus.publish(EventElement::Water).await?; // FIXME: subscribers will see only last publish.
+        tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
         Ok(())
     }
 
-    // #[tokio::test]
-    // async fn actor_event_bus_test() {
-    //     use crate::broadcast::*;
-    //     let event_bus: Arc<EventBus<EventElement>> = Arc::new(EventBus::new());
-    //     let state = EchoState {
-    //         counter: 0,
-    //     };
-    //     let echo_ref = Arc::new(ActorRef::new("echo".to_string(), crate::echo::EchoActor {}, state, 100000).await.unwrap());
+    #[tokio::test]
+    async fn actor_event_bus_test() {
+        use crate::broadcast::*;
+        let event_bus: Arc<EventBus<EventElement>> = Arc::new(EventBus::new());
+        let state = EchoState {
+            counter: 0,
+        };
+        let echo_ref = Arc::new(ActorRef::new("echo".to_string(), crate::echo::EchoActor {}, state, 100000).await.unwrap());
 
-    //     let e = echo_ref.clone();
+        let e = echo_ref.clone();
 
-    //     let subscriber_id = event_bus.subscribe(|event| async move {
-    //         match event {
-    //             EventElement::Fire => {
-    //                 e.send(EchoMessage::Ping).await;
-    //             },
-    //             _ => ()
-    //         }
-    //     }).await;
+        // FIXME: Can't write like that because Fn<(EventElement,)> is not implemented for closure
+        // ??
+        // let subscriber_id = event_bus.subscribe(|event: EventElement| async {
+        //     let e = e.clone();
+        //     match event {
+        //         EventElement::Fire => {
+        //             e.send(EchoMessage::Ping).await.unwrap();
+        //             ()
+        //         },
+        //         _ => ()
+        //     }
+        // }).await;
 
-    //     event_bus.publish(EventElement::Fire).await;
-    //     event_bus.publish(EventElement::Fire).await;
-    //     event_bus.publish(EventElement::Water).await;
-    //     event_bus.publish(EventElement::Fire).await;
-    //     event_bus.unsubscribe(subscriber_id).await; // <- FIXME: This thing executing not conseqentualy, and i dunno is it bug or feature xd.
+        let subscriber_id = event_bus.subscribe(move |event: EventElement| {
+            let e = e.clone();
+            async move {
+                let e = e.clone();
+                match event {
+                    EventElement::Fire => {
+                        e.send(EchoMessage::Ping).await.unwrap();
+                        ()
+                    },
+                    _ => ()
+                }
+        }}).await;
+        event_bus.publish(EventElement::Fire).await.unwrap();
+        event_bus.publish(EventElement::Fire).await.unwrap();
+        event_bus.publish(EventElement::Water).await.unwrap();
+        event_bus.publish(EventElement::Fire).await.unwrap();
+        event_bus.unsubscribe(subscriber_id).await;
 
 
-    //     let state = if let Ok(EchoResponse::Pong {counter}) = echo_ref.ask(EchoMessage::Ping).await {
-    //         counter
-    //     } else {0};
+        let state = if let Ok(EchoResponse::Pong {counter}) = echo_ref.ask(EchoMessage::Ping).await {
+            counter
+        } else {0};
 
-    //     assert_eq!(state, 4) // why is state = 4 ;-;
-    // }
+        assert_eq!(state, 4)
+    }
 
 }
-

@@ -8,6 +8,7 @@ use tokio::sync::mpsc::Sender;
 use crate::{ActorTrait, Handler};
 use crate::SSSD;
 use crate::ActorRef;
+
 pub trait ActorSinkTrait {
     type Actor: SSSD + Handler;
     type Message: SSSD;
@@ -146,4 +147,3 @@ impl <Actor: Handler<Actor = Actor, Message = Message, State = State,Response = 
         )
     }
 }
-
