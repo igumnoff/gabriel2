@@ -159,23 +159,10 @@ mod tests {
 
         let e = echo_ref.clone();
 
-        // FIXME: Can't write like that because Fn<(EventElement,)> is not implemented for closure
-        // ??
-        // let subscriber_id = event_bus.subscribe(|event: EventElement| async {
-        //     let e = e.clone();
-        //     match event {
-        //         EventElement::Fire => {
-        //             e.send(EchoMessage::Ping).await.unwrap();
-        //             ()
-        //         },
-        //         _ => ()
-        //     }
-        // }).await;
 
         let subscriber_id = event_bus.subscribe(move |event: EventElement| {
             let e = e.clone();
             async move {
-                let e = e.clone();
                 match event {
                     EventElement::Fire => {
                         e.send(EchoMessage::Ping).await.unwrap();
