@@ -8,12 +8,15 @@ pub mod remote;
 #[cfg(feature = "sink-stream")]
 pub mod sink_stream;
 
+#[cfg(feature = "broadcast")]
+pub mod broadcast;
+
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::future::Future;
-use std::sync::{Arc};
+use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
-use futures::lock::{Mutex};
+use futures::lock::Mutex;
 use tokio::sync::oneshot::Sender;
 
 pub trait SSSD: Send + Sync + Debug +  'static {}
@@ -114,11 +117,13 @@ pub trait Handler {
     type Error: SSSD + std::error::Error + From<std::io::Error>;
 
     fn receive(&self, ctx: Arc<Context<Self::Actor, Self::Message, Self::State, Self::Response, Self::Error>>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send ;
+
     fn pre_start(&self, _state: Arc<Mutex<Self::State>>, _self_ref: Arc<ActorRef<Self::Actor, Self::Message, Self::State, Self::Response, Self::Error>>) -> impl Future<Output = Result<(), Self::Error>> {
         async {
             Ok(())
         }
     }
+
     fn pre_stop(&self, _state: Arc<Mutex<Self::State>>, _self_ref: Arc<ActorRef<Self::Actor, Self::Message, Self::State, Self::Response, Self::Error>>) -> impl Future<Output = Result<(), Self::Error>> {
         async {
             Ok(())
@@ -453,6 +458,3 @@ impl <Actor: Handler<Actor = Actor, State = State, Message = Message, Error = Er
     }
 
 }
-
-
-

@@ -2,6 +2,7 @@ mod echo;
 
 use gabriel2::*;
 use echo::*;
+
 #[tokio::main]
 async fn main() -> Result<(), EchoError> {
     let state = EchoState {
@@ -12,7 +13,6 @@ async fn main() -> Result<(), EchoError> {
 
     println!("Sent Ping");
     echo_ref.send(EchoMessage::Ping).await?;
-
     println!("Sent Ping and ask response");
     let pong = echo_ref.ask(EchoMessage::Ping).await?;
     println!("Got {:?}", pong);
@@ -29,9 +29,7 @@ mod tests {
     use gabriel2::*;
     use gabriel2::sink_stream::{ActorSink, ActorSinkStreamTrait};
     use gabriel2::sink_stream::ActorSinkTrait;
-
     use crate::echo::{EchoActor, EchoError, EchoMessage, EchoResponse, EchoState};
-
 
     #[tokio::test]
     async fn test_remote() -> anyhow::Result<()> {
@@ -94,5 +92,101 @@ mod tests {
     }
 
 
-}
+    use crate::broadcast::*;
 
+    #[derive(Debug, Copy, Clone)]
+    enum EventElement {
+        Fire,
+        Water
+    }
+
+    impl Event for EventElement {}
+
+
+    #[tokio::test]
+    async fn check_subscription() -> anyhow::Result<()> {
+        use crate::broadcast::*;
+        let event_bus: Arc<EventBus<EventElement>> = Arc::new(EventBus::new());
+        let subscriber_id = event_bus.subscribe(|event| async move {
+            let otp = match event {
+                EventElement::Fire => "FIIIRE!",
+                EventElement::Water => "WAAATER!"
+            };
+            println!("{}", otp);
+        }).await;
+
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+        event_bus.publish(EventElement::Water).await?;
+        event_bus.publish(EventElement::Fire).await?;
+        event_bus.publish(EventElement::Water).await?;
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+        _ = event_bus.unsubscribe(subscriber_id);
+
+        let _subscriber_id = event_bus.subscribe(|event| async move {
+            let otp = match event {
+                EventElement::Fire => "Y",
+                EventElement::Water => "N"
+            };
+            println!("{}", otp);
+        }).await;
+
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+        event_bus.publish(EventElement::Fire).await?;
+        event_bus.publish(EventElement::Water).await?; // FIXME: subscribers will see only last publish.
+        let _subscriber_id = event_bus.subscribe(|event| async move {
+            let otp = match event {
+                EventElement::Fire => "YY",
+                EventElement::Water => "NN"
+            };
+            println!("{}", otp);
+        }).await;
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+
+        event_bus.publish(EventElement::Fire).await?;
+        event_bus.publish(EventElement::Water).await?; // FIXME: subscribers will see only last publish.
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn actor_event_bus_test() {
+        use crate::broadcast::*;
+        let event_bus: Arc<EventBus<EventElement>> = Arc::new(EventBus::new());
+        let state = EchoState {
+            counter: 0,
+        };
+        let echo_ref = Arc::new(ActorRef::new("echo", crate::echo::EchoActor {}, state, 100000).await.unwrap());
+
+        let e = echo_ref.clone();
+
+
+        let subscriber_id = event_bus.subscribe(move |event: EventElement| {
+            let e = e.clone();
+            async move {
+                match event {
+                    EventElement::Fire => {
+                        e.send(EchoMessage::Ping).await.unwrap();
+                        ()
+                    },
+                    _ => ()
+                }
+        }}).await;
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+
+        event_bus.publish(EventElement::Fire).await.unwrap();
+        event_bus.publish(EventElement::Fire).await.unwrap();
+        event_bus.publish(EventElement::Water).await.unwrap();
+        event_bus.publish(EventElement::Fire).await.unwrap();
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+        event_bus.unsubscribe(subscriber_id).await;
+
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+
+        let state = if let Ok(EchoResponse::Pong {counter}) = echo_ref.ask(EchoMessage::Ping).await {
+            counter
+        } else {0};
+
+        assert_eq!(state, 4)
+    }
+
+}
