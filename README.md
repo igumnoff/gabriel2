@@ -16,10 +16,10 @@ Gabriel2: Indeed, an actor library based on Tokio, written in Rust
 - [x] Sink to actor
 - [x] Stream from actor
 - [x] Remote Actor
+- [x] Event Bus
 
 ## TODO
 - [ ] Load Balancer
-- [ ] Event Bus
 
 ## Usage
 
@@ -27,7 +27,7 @@ Cargo.toml
 
 ```toml
 [dependencies]
-gabriel2 = { version = "1.3.0", features = ["remote", "sink-stream"] }
+gabriel2 = { version = "1.4.0", features = ["remote", "sink-stream", "broadcast"] }
 ```
 
 echo.rs
@@ -202,7 +202,7 @@ async fn main() -> Result<(), EchoError> {
         counter: 0,
     };
 
-    let echo_ref = ActorRef::new("echo".to_string(), crate::echo::EchoActor {}, state, 100000).await?;
+    let echo_ref = ActorRef::new("echo", crate::echo::EchoActor {}, state, 100000).await?;
     let echo_server = ActorServer::new("echo_server", "127.0.0.1", 9001, echo_ref).await?;
     let echo_client: Arc<ActorClient<EchoActor, EchoMessage, EchoState, EchoResponse, EchoError >> = ActorClient::new("echo_client", "127.0.0.1", 9001).await?;
 
@@ -219,6 +219,46 @@ async fn main() -> Result<(), EchoError> {
 
 }
 ```
+
+### Event Bus
+
+```rust
+#[tokio::main]
+async fn main() -> Result<(), EchoError> {
+    let state = EchoState {
+        counter: 0,
+    };
+
+    #[derive(Debug, Copy, Clone)]
+    enum EventElement {
+        Fire,
+        Water
+    }
+
+    let echo_ref = ActorRef::new("echo", crate::echo::EchoActor {}, state, 100000).await?;
+
+    let event_bus: Arc<EventBus<EventElement>> = Arc::new(EventBus::new());
+
+    let subscriber_id = event_bus.subscribe(move |event: EventElement| {
+        async move {
+            match event {
+                EventElement::Fire => {
+                    let _ = echo_ref.send(EchoMessage::Ping).await;
+                    ()
+                },
+                _ => ()
+            }
+        }}).await;
+
+    event_bus.publish(EventElement::Fire).await;
+
+    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+
+    event_bus.unsubscribe(subscriber_id).await;
+
+    Ok(())
+}
+``` 
 
 ## Contributing
 I would love to see contributions from the community. If you experience bugs, feel free to open an issue. If you would like to implement a new feature or bug fix, please follow the steps:

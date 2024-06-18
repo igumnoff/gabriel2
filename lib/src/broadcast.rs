@@ -25,6 +25,7 @@ use tokio::{
 
 /// Marker-trait for events
 pub trait Event: Copy + Clone + SSSD {}
+impl <S> Event for S where S: Copy + Clone + SSSD {}
 
 /// `EventCallback` is a marker-trait for callback which will be stored in subscribers
 /// Auto-implemented

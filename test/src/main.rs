@@ -92,16 +92,12 @@ mod tests {
     }
 
 
-    use crate::broadcast::*;
 
     #[derive(Debug, Copy, Clone)]
     enum EventElement {
         Fire,
         Water
     }
-
-    impl Event for EventElement {}
-
 
     #[tokio::test]
     async fn check_subscription() -> anyhow::Result<()> {
