@@ -115,12 +115,14 @@ mod tests {
             println!("{}", otp);
         }).await;
 
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
         event_bus.publish(EventElement::Water).await?;
         event_bus.publish(EventElement::Fire).await?;
         event_bus.publish(EventElement::Water).await?;
-        event_bus.unsubscribe(subscriber_id);
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+        _ = event_bus.unsubscribe(subscriber_id);
 
-        let subscriber_id = event_bus.subscribe(|event| async move {
+        let _subscriber_id = event_bus.subscribe(|event| async move {
             let otp = match event {
                 EventElement::Fire => "Y",
                 EventElement::Water => "N"
@@ -128,19 +130,21 @@ mod tests {
             println!("{}", otp);
         }).await;
 
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
         event_bus.publish(EventElement::Fire).await?;
         event_bus.publish(EventElement::Water).await?; // FIXME: subscribers will see only last publish.
-        let subscriber_id = event_bus.subscribe(|event| async move {
+        let _subscriber_id = event_bus.subscribe(|event| async move {
             let otp = match event {
                 EventElement::Fire => "YY",
                 EventElement::Water => "NN"
             };
             println!("{}", otp);
         }).await;
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
         event_bus.publish(EventElement::Fire).await?;
         event_bus.publish(EventElement::Water).await?; // FIXME: subscribers will see only last publish.
-        tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
         Ok(())
     }
 
@@ -151,7 +155,7 @@ mod tests {
         let state = EchoState {
             counter: 0,
         };
-        let echo_ref = Arc::new(ActorRef::new("echo".to_string(), crate::echo::EchoActor {}, state, 100000).await.unwrap());
+        let echo_ref = Arc::new(ActorRef::new("echo", crate::echo::EchoActor {}, state, 100000).await.unwrap());
 
         let e = echo_ref.clone();
 
@@ -180,12 +184,16 @@ mod tests {
                     _ => ()
                 }
         }}).await;
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+
         event_bus.publish(EventElement::Fire).await.unwrap();
         event_bus.publish(EventElement::Fire).await.unwrap();
         event_bus.publish(EventElement::Water).await.unwrap();
         event_bus.publish(EventElement::Fire).await.unwrap();
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
         event_bus.unsubscribe(subscriber_id).await;
 
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
         let state = if let Ok(EchoResponse::Pong {counter}) = echo_ref.ask(EchoMessage::Ping).await {
             counter

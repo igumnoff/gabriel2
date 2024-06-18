@@ -1,9 +1,7 @@
 use std::future::Future;
 use std::pin::Pin;
 
-use crate::{
-    ActorRef, SSSD,
-};
+use crate::{SSSD};
 
 use std::collections::HashMap;
 
@@ -16,12 +14,11 @@ use tokio::{
     sync::{
         mpsc::{
             self,
-            error::{SendError, RecvError},
-            Receiver, Sender
+            error::{SendError},
+            Sender
         },
         Mutex
-    },
-    task
+    }
 };
 
 
@@ -86,7 +83,6 @@ where
 {
     subscribers: Arc<Mutex<HashMap<usize, Pin<Box<dyn EventCallback<E>>>>>>,
     tx: Sender<E>,
-    rx: Arc<Mutex<Receiver<E>>>,
     counter: AtomicUsize,
 }
 
@@ -96,27 +92,28 @@ where
 {
     // FIXME: Calls function only once for some reason...
     pub fn new() -> Self {
-        let (tx, rx) = mpsc::channel(1000);
+        let (tx, mut rx) = mpsc::channel(1000);
 
         let event_bus = Self {
             subscribers: Arc::new(Mutex::new(HashMap::new())),
             tx: tx,
-            rx: Arc::new(Mutex::new(rx)),
             counter: AtomicUsize::new(0),
         };
 
         log::trace!("Event bus is running");
         let subs = event_bus.subscribers.clone();
-        let rcv = event_bus.rx.clone();
 
         let handle = tokio::runtime::Handle::current();
-
         {
             let _join_handler = handle.spawn(async move {
                 loop {
-                    EventBus::unwind_events(
-                         rcv.clone(), subs.clone()
-                    ).await;
+                    while let Some(event) = rx.recv().await {
+                        let subscribers = subs.lock().await;
+                        log::trace!("processing event: {:?}", event);
+                        for (_id, callback) in &*subscribers {
+                            callback.call(event).await;
+                        }
+                    }
                 }
             });
         } // Dropped to make it background task
@@ -135,13 +132,6 @@ where
         F: EventCallback<E>,
     {
 
-        EventBus::unwind_events(
-            self.rx.clone(),
-            self.subscribers.clone()
-        ).await; // This made beacause of invatiant
-                 // that subscribers should see events
-                 // that goes only after subscription
-
         let id = self.counter.fetch_add(1, Ordering::SeqCst);
         log::trace!("New subscriber in event bus. id: {}", id);
 
@@ -152,38 +142,12 @@ where
 
     pub async fn unsubscribe(&self, subscriber_id: usize) {
 
-        EventBus::unwind_events(
-            self.rx.clone(),
-            self.subscribers.clone()
-        ).await; // This made beacause of invatiant
-                 // that subscribers should see events
-                 // that goes only after subscription
-
         log::trace!("Removed subscriber in event bus. id: {}", subscriber_id);
 
         let mut subscribers = self.subscribers.lock().await;
         subscribers.remove(&subscriber_id);
     }
 
-    // Made like this because self is not Arc, but these fields are
-    async fn unwind_events(
-        rcv: Arc<Mutex<Receiver<E>>>,
-        subscribers: Arc<Mutex<HashMap<usize, Pin<Box<dyn EventCallback<E>>>>>>
-    ) {
-
-        let mut rcv = rcv.lock().await;
-        let subscribers = subscribers.lock().await;
-
-        while !rcv.is_empty() {
-            if let Some(event) = rcv.recv().await {
-                log::trace!("processing event: {:?}", event);
-                for (_id, callback) in &*subscribers {
-                    callback.call(event).await;
-                }
-            }
-        }
-
-    }
 }
 
 // impl<E> Default for EventBus<E>
