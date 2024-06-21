@@ -29,7 +29,7 @@ pub struct ActorRef<Actor, Message, State, Response, Error> {
     state: Option<Arc<Mutex<State>>>,
     self_ref: Mutex<Option<Arc<ActorRef<Actor, Message, State, Response, Error>>>>,
     name: String,
-    actor: Mutex<Option<Arc<Actor>>>,
+    actor: Arc<Actor>,
     running: Mutex<bool>,
 }
 
@@ -128,13 +128,8 @@ impl <Actor: Handler<Actor = Actor, State = State, Message = Message, Error = Er
         if *self.running.lock().await == false {
             return Ok(());
         }
-        {
-            let self_ref =  self.self_ref.lock().await.clone().unwrap();
-            let mut lock = self.actor.lock().await;
-            let actor = lock.as_ref().unwrap();
-            actor.pre_stop(self.state.clone().unwrap(), self_ref).await?;
-            *lock = None;
-        }
+        let self_ref =  self.self_ref.lock().await.clone().unwrap();
+        self.actor.pre_stop(self.state.clone().unwrap(), self_ref).await?;
         *self.self_ref.lock().await = None;
 
         *self.running.lock().await = false;
@@ -172,7 +167,7 @@ impl <Actor: Handler<Actor = Actor, State = State, Message = Message, Error = Er
             state: Some(state_clone),
             self_ref: Mutex::new(None),
             name: name.as_ref().to_string(),
-            actor: Mutex::new(Some(actor_arc.clone())),
+            actor:actor_arc.clone(),
             running: Mutex::new(false),
         };
 
