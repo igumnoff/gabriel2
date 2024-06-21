@@ -25,7 +25,6 @@ impl<S> SSSD for S where S: Send + Sync + Debug + 'static {}
 #[derive(Debug)]
 pub struct ActorRef<Actor, Message, State, Response, Error> {
     tx: mpsc::Sender<(Message, Option<Sender<Result<Response, Error>>>)>,
-    join_handle: Mutex<Option<tokio::task::JoinHandle<()>>>,
     state: Arc<Mutex<State>>,
     name: String,
     actor: Arc<Actor>,
@@ -130,15 +129,6 @@ impl <Actor: Handler<Actor = Actor, State = State, Message = Message, Error = Er
         self.actor.pre_stop(self.state.clone()).await?;
 
         *self.running.lock().await = false;
-        let join_handle = self.join_handle.lock().await.take();
-        match join_handle {
-            None => {}
-            Some(join_handle) => {
-                let _ = join_handle.abort();
-                log::trace!("join_handle abort()");
-            }
-        }
-        *self.join_handle.lock().await = None;
         log::debug!("<{}> Stop worker", self.name);
         Ok(())
     }
@@ -159,7 +149,6 @@ impl <Actor: Handler<Actor = Actor, State = State, Message = Message, Error = Er
         let actor = actor_arc.clone();
         let actor_ref = ActorRef {
             tx,
-            join_handle: Mutex::new(None),
             state: state_clone,
             name: name.as_ref().to_string(),
             actor:actor_arc.clone(),
@@ -172,13 +161,14 @@ impl <Actor: Handler<Actor = Actor, State = State, Message = Message, Error = Er
         let ret_clone3 = ret.clone();
 
         let handle = tokio::runtime::Handle::current();
-        let join_handle = handle.spawn(async move {
+        let _ = handle.spawn(async move {
             let me = ret_clone2.clone();
-
             loop {
                 tokio::select! {
-            _ = futures::future::pending::<()>() => {
-
+            _ = tokio::time::sleep(tokio::time::Duration::from_secs(1)) => {
+                    if *ret_clone3.running.lock().await == false {
+                        break;
+                    }
             },
             msg_opt = rx.recv() => {
                 match msg_opt {
@@ -188,7 +178,7 @@ impl <Actor: Handler<Actor = Actor, State = State, Message = Message, Error = Er
                     }
                     Some(message) => {
                                 if *ret_clone3.running.lock().await == false {
-                                    return ();
+                                    break;
                                 }
                                 let msg = message.0;
                                 let sender = message.1;
@@ -223,8 +213,8 @@ impl <Actor: Handler<Actor = Actor, State = State, Message = Message, Error = Er
                     }
                 }
             }
+            log::debug!("Actor <{}> stopped", me.name);
         });
-        *ret.join_handle.lock().await = Some(join_handle);
         let _ = actor_arc.pre_start(ret_clone.state.clone()).await?;
         *ret.running.lock().await = true;
         log::info!("<{}> Actor started", ret_clone.name);
