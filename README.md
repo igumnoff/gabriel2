@@ -27,7 +27,7 @@ Cargo.toml
 
 ```toml
 [dependencies]
-gabriel2 = { version = "1.4.0", features = ["remote", "sink-stream", "broadcast"] }
+gabriel2 = { version = "1.4.1", features = ["remote", "sink-stream", "broadcast"] }
 ```
 
 echo.rs
