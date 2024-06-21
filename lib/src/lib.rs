@@ -26,7 +26,7 @@ impl<S> SSSD for S where S: Send + Sync + Debug + 'static {}
 pub struct ActorRef<Actor, Message, State, Response, Error> {
     tx: mpsc::Sender<(Message, Option<Sender<Result<Response, Error>>>)>,
     join_handle: Mutex<Option<tokio::task::JoinHandle<()>>>,
-    state: Option<Arc<Mutex<State>>>,
+    state: Arc<Mutex<State>>,
     self_ref: Mutex<Option<Arc<ActorRef<Actor, Message, State, Response, Error>>>>,
     name: String,
     actor: Arc<Actor>,
@@ -129,7 +129,7 @@ impl <Actor: Handler<Actor = Actor, State = State, Message = Message, Error = Er
             return Ok(());
         }
         let self_ref =  self.self_ref.lock().await.clone().unwrap();
-        self.actor.pre_stop(self.state.clone().unwrap(), self_ref).await?;
+        self.actor.pre_stop(self.state.clone(), self_ref).await?;
         *self.self_ref.lock().await = None;
 
         *self.running.lock().await = false;
@@ -164,7 +164,7 @@ impl <Actor: Handler<Actor = Actor, State = State, Message = Message, Error = Er
         let actor_ref = ActorRef {
             tx,
             join_handle: Mutex::new(None),
-            state: Some(state_clone),
+            state: state_clone,
             self_ref: Mutex::new(None),
             name: name.as_ref().to_string(),
             actor:actor_arc.clone(),
@@ -231,7 +231,7 @@ impl <Actor: Handler<Actor = Actor, State = State, Message = Message, Error = Er
             }
         });
         *ret.join_handle.lock().await = Some(join_handle);
-        let _ = actor_arc.pre_start(ret_clone.state.clone().unwrap(), ret_clone.clone()).await?;
+        let _ = actor_arc.pre_start(ret_clone.state.clone(), ret_clone.clone()).await?;
         *ret.running.lock().await = true;
         log::info!("<{}> Actor started", ret_clone.name);
         Ok(ret_clone)
@@ -239,16 +239,9 @@ impl <Actor: Handler<Actor = Actor, State = State, Message = Message, Error = Er
 
 
     async fn state(&self) -> Result<Arc<Mutex<Self::State>>, std::io::Error> {
-        let state_opt = self.state.clone();
-        log::trace!("<{}> State: {:?}", self.name, state_opt);
-        match state_opt {
-            None => {
-                return Err(std::io::Error::new(std::io::ErrorKind::Other, "No state").into());
-            }
-            Some(state) => {
-                Ok(state)
-            }
-        }
+        let state = self.state.clone();
+        log::trace!("<{}> State: {:?}", self.name, state.lock().await);
+        Ok(state)
     }
 
 }
