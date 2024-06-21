@@ -14,6 +14,7 @@ pub mod broadcast;
 use std::fmt::Debug;
 use std::future::Future;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::sync::{mpsc, oneshot};
 use futures::lock::Mutex;
 use tokio::sync::oneshot::Sender;
@@ -28,7 +29,7 @@ pub struct ActorRef<Actor, Message, State, Response, Error> {
     state: Arc<Mutex<State>>,
     name: String,
     actor: Arc<Actor>,
-    running: Mutex<bool>,
+    running: AtomicBool,
 }
 
 impl<Actor, Message, State, Response, Error>  Drop for ActorRef<Actor, Message, State, Response, Error>  {
@@ -123,12 +124,12 @@ impl <Actor: Handler<Actor = Actor, State = State, Message = Message, Error = Er
     }
 
     async fn stop(&self) -> Result<(), Error> {
-        if *self.running.lock().await == false {
+        if self.running.load(Ordering::SeqCst) == false {
             return Ok(());
         }
         self.actor.pre_stop(self.state.clone()).await?;
 
-        *self.running.lock().await = false;
+        self.running.store(false, Ordering::SeqCst);
         log::debug!("<{}> Stop worker", self.name);
         Ok(())
     }
@@ -152,7 +153,7 @@ impl <Actor: Handler<Actor = Actor, State = State, Message = Message, Error = Er
             state: state_clone,
             name: name.as_ref().to_string(),
             actor:actor_arc.clone(),
-            running: Mutex::new(false),
+            running: AtomicBool::new(false),
         };
 
         let ret = Arc::new(actor_ref);
@@ -161,23 +162,25 @@ impl <Actor: Handler<Actor = Actor, State = State, Message = Message, Error = Er
         let ret_clone3 = ret.clone();
 
         let handle = tokio::runtime::Handle::current();
+        let _ = actor_arc.pre_start(ret_clone.state.clone()).await?;
+        ret.running.store(true, Ordering::SeqCst);
         let _ = handle.spawn(async move {
             let me = ret_clone2.clone();
             loop {
                 tokio::select! {
-            _ = tokio::time::sleep(tokio::time::Duration::from_secs(1)) => {
-                    if *ret_clone3.running.lock().await == false {
-                        break;
-                    }
-            },
-            msg_opt = rx.recv() => {
-                match msg_opt {
-                    None => {
-                        log::debug!("<{}> No message", me.name);
-                        break;
-                    }
-                    Some(message) => {
-                                if *ret_clone3.running.lock().await == false {
+                    _ = tokio::time::sleep(tokio::time::Duration::from_secs(1)) => {
+                        if ret_clone3.running.load(Ordering::SeqCst) == false {
+                            break;
+                        }
+                    },
+                    msg_opt = rx.recv() => {
+                        match msg_opt {
+                            None => {
+                                log::debug!("<{}> No message", me.name);
+                                break;
+                            }
+                            Some(message) => {
+                                if ret_clone3.running.load(Ordering::SeqCst ) == false {
                                     break;
                                 }
                                 let msg = message.0;
@@ -215,8 +218,6 @@ impl <Actor: Handler<Actor = Actor, State = State, Message = Message, Error = Er
             }
             log::debug!("Actor <{}> stopped", me.name);
         });
-        let _ = actor_arc.pre_start(ret_clone.state.clone()).await?;
-        *ret.running.lock().await = true;
         log::info!("<{}> Actor started", ret_clone.name);
         Ok(ret_clone)
     }
