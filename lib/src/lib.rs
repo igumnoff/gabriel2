@@ -27,7 +27,6 @@ pub struct ActorRef<Actor, Message, State, Response, Error> {
     tx: mpsc::Sender<(Message, Option<Sender<Result<Response, Error>>>)>,
     join_handle: Mutex<Option<tokio::task::JoinHandle<()>>>,
     state: Arc<Mutex<State>>,
-    self_ref: Mutex<Option<Arc<ActorRef<Actor, Message, State, Response, Error>>>>,
     name: String,
     actor: Arc<Actor>,
     running: Mutex<bool>,
@@ -55,13 +54,13 @@ pub trait Handler {
 
     fn receive(&self, ctx: Arc<Context<Self::Actor, Self::Message, Self::State, Self::Response, Self::Error>>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send ;
 
-    fn pre_start(&self, _state: Arc<Mutex<Self::State>>, _self_ref: Arc<ActorRef<Self::Actor, Self::Message, Self::State, Self::Response, Self::Error>>) -> impl Future<Output = Result<(), Self::Error>> {
+    fn pre_start(&self, _state: Arc<Mutex<Self::State>>) -> impl Future<Output = Result<(), Self::Error>> {
         async {
             Ok(())
         }
     }
 
-    fn pre_stop(&self, _state: Arc<Mutex<Self::State>>, _self_ref: Arc<ActorRef<Self::Actor, Self::Message, Self::State, Self::Response, Self::Error>>) -> impl Future<Output = Result<(), Self::Error>> {
+    fn pre_stop(&self, _state: Arc<Mutex<Self::State>>) -> impl Future<Output = Result<(), Self::Error>> {
         async {
             Ok(())
         }
@@ -128,12 +127,9 @@ impl <Actor: Handler<Actor = Actor, State = State, Message = Message, Error = Er
         if *self.running.lock().await == false {
             return Ok(());
         }
-        let self_ref =  self.self_ref.lock().await.clone().unwrap();
-        self.actor.pre_stop(self.state.clone(), self_ref).await?;
-        *self.self_ref.lock().await = None;
+        self.actor.pre_stop(self.state.clone()).await?;
 
         *self.running.lock().await = false;
-        *self.self_ref.lock().await = None;
         let join_handle = self.join_handle.lock().await.take();
         match join_handle {
             None => {}
@@ -165,7 +161,6 @@ impl <Actor: Handler<Actor = Actor, State = State, Message = Message, Error = Er
             tx,
             join_handle: Mutex::new(None),
             state: state_clone,
-            self_ref: Mutex::new(None),
             name: name.as_ref().to_string(),
             actor:actor_arc.clone(),
             running: Mutex::new(false),
@@ -175,7 +170,6 @@ impl <Actor: Handler<Actor = Actor, State = State, Message = Message, Error = Er
         let ret_clone = ret.clone();
         let ret_clone2 = ret.clone();
         let ret_clone3 = ret.clone();
-        *ret.self_ref.lock().await = Some(ret.clone());
 
         let handle = tokio::runtime::Handle::current();
         let join_handle = handle.spawn(async move {
@@ -231,7 +225,7 @@ impl <Actor: Handler<Actor = Actor, State = State, Message = Message, Error = Er
             }
         });
         *ret.join_handle.lock().await = Some(join_handle);
-        let _ = actor_arc.pre_start(ret_clone.state.clone(), ret_clone.clone()).await?;
+        let _ = actor_arc.pre_start(ret_clone.state.clone()).await?;
         *ret.running.lock().await = true;
         log::info!("<{}> Actor started", ret_clone.name);
         Ok(ret_clone)
