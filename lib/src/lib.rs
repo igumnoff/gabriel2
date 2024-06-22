@@ -19,10 +19,34 @@ use tokio::sync::{mpsc, oneshot};
 use futures::lock::Mutex;
 use tokio::sync::oneshot::Sender;
 
+/// `SSSD` is a trait that represents a type that is `Send`, `Sync`, `Debug`, and `'static`.
+///
+/// This trait is used as a bound for types that need to be sent between threads, shared references between threads,
+/// have the ability to be formatted using the `Debug` formatter, and have a static lifetime.
 pub trait SSSD: Send + Sync + Debug +  'static {}
+
+/// This is an implementation of the `SSSD` trait for all types `S` that satisfy the bounds of being `Send`, `Sync`, `Debug`, and `'static`.
 impl<S> SSSD for S where S: Send + Sync + Debug + 'static {}
 
 
+/// `ActorRef` is a structure that represents a reference to an actor in an actor system.
+/// It contains the necessary components to interact with the actor and manage its state.
+///
+/// # Type Parameters
+///
+/// * `Actor`: The type of the actor this reference points to.
+/// * `Message`: The type of messages that can be sent to the actor.
+/// * `State`: The type of the state that the actor maintains.
+/// * `Response`: The type of the response that the actor produces.
+/// * `Error`: The type of the error that the actor can return.
+///
+/// # Fields
+///
+/// * `tx`: A sender in the message-passing channel. It is used to send messages to the actor.
+/// * `state`: An atomic reference counter (Arc) wrapping a mutex-protected state of the actor.
+/// * `name`: A string representing the name of the actor.
+/// * `actor`: An atomic reference counter (Arc) to the actor.
+/// * `running`: An atomic boolean indicating whether the actor is currently running.
 #[derive(Debug)]
 pub struct ActorRef<Actor, Message, State, Response, Error> {
     tx: mpsc::Sender<(Message, Option<Sender<Result<Response, Error>>>)>,
@@ -38,6 +62,22 @@ impl<Actor, Message, State, Response, Error>  Drop for ActorRef<Actor, Message, 
     }
 }
 
+/// `Context` is a structure that represents the context in which an actor operates in an actor system.
+/// It contains the necessary components for an actor to process a message and manage its state.
+///
+/// # Type Parameters
+///
+/// * `Actor`: The type of the actor this context is associated with.
+/// * `Message`: The type of messages that can be processed in this context.
+/// * `State`: The type of the state that the actor maintains.
+/// * `Response`: The type of the response that the actor produces.
+/// * `Error`: The type of the error that the actor can return.
+///
+/// # Fields
+///
+/// * `mgs`: The message that the actor needs to process.
+/// * `state`: An atomic reference counter (Arc) wrapping a mutex-protected state of the actor.
+/// * `self_ref`: A reference to the actor itself.
 #[derive(Debug)]
 pub struct Context<Actor, Message, State, Response, Error> {
     pub mgs: Message,
@@ -45,6 +85,16 @@ pub struct Context<Actor, Message, State, Response, Error> {
     pub self_ref: Arc<ActorRef<Actor, Message, State, Response, Error>>,
 }
 
+/// The `Handler` trait defines the behavior of an actor in an actor system.
+/// It provides methods for handling incoming messages and lifecycle events.
+///
+/// # Type Parameters
+///
+/// * `Actor`: The type of the actor this handler is associated with. It must implement the `SSSD` trait.
+/// * `Message`: The type of messages that this handler can process. It must implement the `SSSD` trait.
+/// * `State`: The type of the state that the actor maintains. It must implement the `SSSD` trait.
+/// * `Response`: The type of the response that the actor produces. It must implement the `SSSD` trait.
+/// * `Error`: The type of the error that the actor can return. It must implement the `SSSD` trait and `std::error::Error`, and be convertible from `std::io::Error`.
 pub trait Handler {
     type Actor: SSSD;
     type Message: SSSD;
@@ -67,6 +117,14 @@ pub trait Handler {
     }
 }
 
+/// The `ActorTrait` trait defines the behavior of an actor in an actor system.
+/// It provides methods for sending messages to the actor, asking the actor for a response, and stopping the actor.
+///
+/// # Type Parameters
+///
+/// * `Message`: The type of messages that this actor can process. It must implement the `SSSD` trait.
+/// * `Response`: The type of the response that the actor produces. It must implement the `SSSD` trait.
+/// * `Error`: The type of the error that the actor can return. It must implement the `SSSD` trait and `std::error::Error`, and be convertible from `std::io::Error`.
 pub trait ActorTrait {
     type Message: SSSD;
     type Response: SSSD;
@@ -78,7 +136,14 @@ pub trait ActorTrait {
 
 }
 
-
+/// The `ActorRefTrait` trait defines the behavior of an actor reference in an actor system.
+/// It provides methods for creating a new actor reference and getting the state of the actor.
+///
+/// # Type Parameters
+///
+/// * `Actor`: The type of the actor this reference points to. It must implement the `Handler` and `SSSD` traits.
+/// * `State`: The type of the state that the actor maintains. It must implement the `SSSD` trait.
+/// * `Error`: The type of the error that the actor can return. It must implement the `SSSD` trait and `std::error::Error`, and be convertible from `std::io::Error`.
 pub trait ActorRefTrait {
     type Actor:  Handler + SSSD;
     type State: SSSD;
@@ -89,6 +154,18 @@ pub trait ActorRefTrait {
 }
 
 
+/// Implementation of the `ActorTrait` for `ActorRef`.
+///
+/// This implementation provides the functionality for sending messages to the actor (`ask` and `send` methods),
+/// and for stopping the actor (`stop` method).
+///
+/// # Type Parameters
+///
+/// * `Actor`: The type of the actor this reference points to. It must implement the `Handler` and `SSSD` traits.
+/// * `Message`: The type of messages that this actor can process. It must implement the `SSSD` trait.
+/// * `State`: The type of the state that the actor maintains. It must implement the `SSSD` trait.
+/// * `Response`: The type of the response that the actor produces. It must implement the `SSSD` trait.
+/// * `Error`: The type of the error that the actor can return. It must implement the `SSSD` trait and `std::error::Error`, and be convertible from `std::io::Error`.
 impl <Actor: Handler<Actor = Actor, State = State, Message = Message, Error = Error, Response = Response> + SSSD,
     Message: SSSD, State: SSSD, Response:  SSSD, Error: SSSD + std::error::Error + From<std::io::Error>> ActorTrait for ActorRef<Actor, Message, State, Response, Error> {
     type Message = Message;
@@ -135,6 +212,18 @@ impl <Actor: Handler<Actor = Actor, State = State, Message = Message, Error = Er
     }
 }
 
+/// Implementation of the `ActorRefTrait` for `ActorRef`.
+///
+/// This implementation provides the functionality for creating a new actor reference (`new` method),
+/// and for getting the state of the actor (`state` method).
+///
+/// # Type Parameters
+///
+/// * `Actor`: The type of the actor this reference points to. It must implement the `Handler` and `SSSD` traits.
+/// * `Message`: The type of messages that this actor can process. It must implement the `SSSD` trait.
+/// * `State`: The type of the state that the actor maintains. It must implement the `SSSD` trait.
+/// * `Response`: The type of the response that the actor produces. It must implement the `SSSD` trait.
+/// * `Error`: The type of the error that the actor can return. It must implement the `SSSD` trait and `std::error::Error`, and be convertible from `std::io::Error`.
 impl <Actor: Handler<Actor = Actor, State = State, Message = Message, Error = Error, Response = Response> + SSSD , Message: SSSD,
     State: SSSD, Response:  SSSD, Error: SSSD + std::error::Error + From<std::io::Error>> ActorRefTrait for ActorRef<Actor, Message, State, Response, Error> {
     type Actor = Actor;

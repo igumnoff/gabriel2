@@ -1,6 +1,6 @@
 [package]
 name = "gabriel2"
-version = "1.4.1"
+version = "1.4.2"
 edition = "2021"
 
 authors = ["Evgeny Igumnov <igumnovnsk@gmail.com>"]
