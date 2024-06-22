@@ -24,7 +24,6 @@ use tokio::sync::oneshot::Sender;
 /// This trait is used as a bound for types that need to be sent between threads, shared references between threads,
 /// have the ability to be formatted using the `Debug` formatter, and have a static lifetime.
 pub trait SSSD: Send + Sync + Debug +  'static {}
-
 /// This is an implementation of the `SSSD` trait for all types `S` that satisfy the bounds of being `Send`, `Sync`, `Debug`, and `'static`.
 impl<S> SSSD for S where S: Send + Sync + Debug + 'static {}
 
@@ -102,14 +101,52 @@ pub trait Handler {
     type Response: SSSD;
     type Error: SSSD + std::error::Error + From<std::io::Error>;
 
+    /// Handles the incoming message for the actor.
+    ///
+    /// This method is called when the actor receives a message. It processes the message in the context of the actor
+    /// and returns a future that resolves to a result containing either the response produced by the actor or an error.
+    ///
+    /// # Parameters
+    ///
+    /// * `ctx`: The context in which the actor operates. It contains the message to be processed, the state of the actor,
+    ///   and a reference to the actor itself.
+    ///
+    /// # Returns
+    ///
+    /// A future that resolves to a result containing either the response produced by the actor or an error.
     fn receive(&self, ctx: Arc<Context<Self::Actor, Self::Message, Self::State, Self::Response, Self::Error>>) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send ;
 
+    /// Handles the pre-start lifecycle event for the actor.
+    ///
+    /// This method is called before the actor starts processing messages. It can be used to perform setup operations
+    /// that the actor needs before it can start processing messages.
+    ///
+    /// # Parameters
+    ///
+    /// * `_state`: The state of the actor. This parameter is currently unused.
+    ///
+    /// # Returns
+    ///
+    /// A future that resolves to a result. If the setup operations were successful, the result is `Ok(())`.
+    /// If there was an error during the setup operations, the result is `Err(Self::Error)`.
     fn pre_start(&self, _state: Arc<Mutex<Self::State>>) -> impl Future<Output = Result<(), Self::Error>> {
         async {
             Ok(())
         }
     }
-
+    /// Handles the pre-stop lifecycle event for the actor.
+    ///
+    /// This method is called before the actor stops processing messages. It can be used to perform cleanup operations
+    /// that the actor needs before it can safely stop.
+    ///
+    /// # Parameters
+    ///
+    /// * `_state`: The state of the actor. This parameter is currently unused.
+    ///
+    /// # Returns
+    ///
+    /// A future that resolves to a result. If the cleanup operations were successful, the result is `Ok(())`.
+    /// If there was an error during the cleanup operations, the result is `Err(Self::Error)`.
     fn pre_stop(&self, _state: Arc<Mutex<Self::State>>) -> impl Future<Output = Result<(), Self::Error>> {
         async {
             Ok(())
@@ -129,11 +166,40 @@ pub trait ActorTrait {
     type Message: SSSD;
     type Response: SSSD;
     type Error: SSSD + std::error::Error + From<std::io::Error>;
-
+    /// Sends a message to the actor and waits for a response.
+    ///
+    /// This method sends a message to the actor and returns a future that resolves to a result containing either the response produced by the actor or an error.
+    ///
+    /// # Parameters
+    ///
+    /// * `msg`: The message to be sent to the actor.
+    ///
+    /// # Returns
+    ///
+    /// A future that resolves to a result containing either the response produced by the actor or an error.
     fn ask(&self, msg: Self::Message) -> impl Future<Output = Result<Self::Response, Self::Error>>;
+    /// Sends a message to the actor without waiting for a response.
+    ///
+    /// This method sends a message to the actor and returns a future that resolves to a result indicating whether the message was successfully sent.
+    ///
+    /// # Parameters
+    ///
+    /// * `msg`: The message to be sent to the actor.
+    ///
+    /// # Returns
+    ///
+    /// A future that resolves to a result indicating whether the message was successfully sent. If the message was successfully sent, the result is `Ok(())`.
+    /// If there was an error while sending the message, the result is `Err(std::io::Error)`.
     fn send(&self, msg: Self::Message) -> impl Future<Output = Result<(), std::io::Error>>;
+    /// Stops the actor.
+    ///
+    /// This method stops the actor and returns a future that resolves to a result indicating whether the actor was successfully stopped.
+    ///
+    /// # Returns
+    ///
+    /// A future that resolves to a result indicating whether the actor was successfully stopped. If the actor was successfully stopped, the result is `Ok(())`.
+    /// If there was an error while stopping the actor, the result is `Err(Self::Error)`.
     fn stop(&self) ->impl Future<Output = Result<(), Self::Error>>;
-
 }
 
 /// The `ActorRefTrait` trait defines the behavior of an actor reference in an actor system.
@@ -148,8 +214,29 @@ pub trait ActorRefTrait {
     type Actor:  Handler + SSSD;
     type State: SSSD;
     type Error: SSSD + std::error::Error + From<std::io::Error>;
-
+    /// Creates a new actor reference.
+    ///
+    /// This method creates a new actor reference with the given name, actor, state, and buffer size.
+    /// It returns a future that resolves to a result containing either the new actor reference or an error.
+    ///
+    /// # Parameters
+    ///
+    /// * `name`: The name of the actor.
+    /// * `actor`: The actor that this reference will point to.
+    /// * `state`: The initial state of the actor.
+    /// * `buffer`: The size of the message buffer for the actor.
+    ///
+    /// # Returns
+    ///
+    /// A future that resolves to a result containing either a new actor reference or an error.
     fn new(name: impl AsRef<str>, actor: Self::Actor, state: Self::State, buffer: usize) -> impl Future<Output = Result<Arc<Self>, Self::Error>>;
+    /// Gets the state of the actor.
+    ///
+    /// This method returns a future that resolves to a result containing either the state of the actor or an error.
+    ///
+    /// # Returns
+    ///
+    /// A future that resolves to a result containing either the state of the actor or an error.
     fn state(&self) -> impl Future<Output = Result<Arc<Mutex<Self::State>>, std::io::Error>>;
 }
 
@@ -171,6 +258,17 @@ impl <Actor: Handler<Actor = Actor, State = State, Message = Message, Error = Er
     type Message = Message;
     type Response = Response;
     type Error = Error;
+    /// Sends a message to the actor and waits for a response.
+    ///
+    /// This method sends a message to the actor and returns a future that resolves to a result containing either the response produced by the actor or an error.
+    ///
+    /// # Parameters
+    ///
+    /// * `msg`: The message to be sent to the actor.
+    ///
+    /// # Returns
+    ///
+    /// A future that resolves to a result containing either the response produced by the actor or an error.
     async fn ask(&self, msg: Message) -> Result<Response, Error>
     {
         log::debug!("<{}> Result message: {:?}", self.name, msg);
@@ -190,7 +288,18 @@ impl <Actor: Handler<Actor = Actor, State = State, Message = Message, Error = Er
             }
         }
     }
-
+    /// Sends a message to the actor without waiting for a response.
+    ///
+    /// This method sends a message to the actor and returns a future that resolves to a result indicating whether the message was successfully sent.
+    ///
+    /// # Parameters
+    ///
+    /// * `msg`: The message to be sent to the actor.
+    ///
+    /// # Returns
+    ///
+    /// A future that resolves to a result indicating whether the message was successfully sent. If the message was successfully sent, the result is `Ok(())`.
+    /// If there was an error while sending the message, the result is `Err(std::io::Error)`.
     async fn send(&self, msg: Message) -> Result<(), std::io::Error> {
         log::debug!("<{}> Push message: {:?}", self.name, msg);
         let r = self.tx.send((msg, None)).await;
@@ -199,15 +308,21 @@ impl <Actor: Handler<Actor = Actor, State = State, Message = Message, Error = Er
         }
         Ok(())
     }
-
+    /// Stops the actor.
+    ///
+    /// This method stops the actor and returns a future that resolves to a result indicating whether the actor was successfully stopped.
+    ///
+    /// # Returns
+    ///
+    /// A future that resolves to a result indicating whether the actor was successfully stopped. If the actor was successfully stopped, the result is `Ok(())`.
+    /// If there was an error while stopping the actor, the result is `Err(Self::Error)`.
     async fn stop(&self) -> Result<(), Error> {
         if self.running.load(Ordering::SeqCst) == false {
             return Ok(());
         }
         self.actor.pre_stop(self.state.clone()).await?;
-
         self.running.store(false, Ordering::SeqCst);
-        log::debug!("<{}> Stop worker", self.name);
+        log::debug!("<{}> Stop actor", self.name);
         Ok(())
     }
 }
@@ -229,7 +344,29 @@ impl <Actor: Handler<Actor = Actor, State = State, Message = Message, Error = Er
     type Actor = Actor;
     type State = State;
     type Error = Error;
-
+    /// Creates a new actor reference and starts its execution.
+    ///
+    /// This method creates a new actor reference with the given name, actor, state, and buffer size.
+    /// It initializes the actor's state and starts its execution in a new task.
+    ///
+    /// # Parameters
+    ///
+    /// * `name`: The name of the actor.
+    /// * `actor`: The actor that this reference will point to.
+    /// * `state`: The initial state of the actor.
+    /// * `buffer`: The size of the message buffer for the actor.
+    ///
+    /// # Returns
+    ///
+    /// A future that resolves to a result containing either the new actor reference or an error.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the actor fails to start.
+    ///
+    /// # Panics
+    ///
+    /// This function might panic if the actor's task panics.
     async fn new(name: impl AsRef<str>, actor: Self::Actor, state: Self::State, buffer: usize) ->  Result<Arc<Self>, Self::Error>
     {
         let state_arc = Arc::new(Mutex::new(state));
@@ -310,8 +447,14 @@ impl <Actor: Handler<Actor = Actor, State = State, Message = Message, Error = Er
         log::info!("<{}> Actor started", ret_clone.name);
         Ok(ret_clone)
     }
-
-
+    /// Retrieves the state of the actor.
+    ///
+    /// This method clones the state of the actor and returns it. The state is wrapped in an `Arc<Mutex<T>>` to ensure
+    /// safe concurrent access. The method logs the current state for tracing purposes.
+    ///
+    /// # Returns
+    ///
+    /// A future that resolves to a `Result` containing either the state of the actor wrapped in an `Arc<Mutex<T>>` or an `std::io::Error`.
     async fn state(&self) -> Result<Arc<Mutex<Self::State>>, std::io::Error> {
         let state = self.state.clone();
         log::trace!("<{}> State: {:?}", self.name, state.lock().await);
