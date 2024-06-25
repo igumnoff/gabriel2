@@ -5,6 +5,7 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot, Mutex};
 
 use crate::{ActorRef, ActorRefTrait, ActorTrait, Handler, SSSD};
+
 /// `LoadBalancer` is a proxy that distributes load among a collection of `ActorRef` instances.
 ///
 /// # Methods
@@ -17,18 +18,9 @@ use crate::{ActorRef, ActorRefTrait, ActorTrait, Handler, SSSD};
 ///
 /// # Examples
 ///
-/// ## new
-/// ```
-///  // Create 5 actors in one LoadBalancer
-///  let lb = LoadBalancer::new("load_balancer", 5, |id| {
-///    let ar = ActorRef::new(...);
-///    ar
-///  });
-/// ```
-
 pub struct LoadBalancer<Actor, Message, State, Response, Error> {
     name: String,
-    actor_refs: Mutex<Vec<Arc<ActorRef<Actor, Message, State, Response, Error>>>>, // For adding new actors? Do i need even need it?
+    actor_refs: Arc<Vec<Arc<ActorRef<Actor, Message, State, Response, Error>>>>,
     tx: mpsc::Sender<(Message, Option<oneshot::Sender<Result<Response, Error>>>)>,
     running: AtomicBool,
     turn: AtomicUsize,
@@ -66,7 +58,7 @@ impl<
 
         let lb = Arc::new(Self {
             name: name.into(),
-            actor_refs: Mutex::new(instances),
+            actor_refs: Arc::new(instances),
             tx: tx,
             running: AtomicBool::new(false),
             turn: AtomicUsize::new(0),
@@ -79,8 +71,11 @@ impl<
             lb.running.store(true, Ordering::SeqCst);
             // TODO: Shutdown on .stop()
             loop {
+                if !lb.running.load(Ordering::SeqCst) {
+                    break;
+                }
                 while let Some((msg, sender)) = rx.recv().await {
-                    let actors = lb.actor_refs.lock().await;
+                    let actors = lb.actor_refs.clone();
                     let turn = lb
                         .turn
                         .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |x| {
@@ -97,6 +92,7 @@ impl<
 
                     let msg_dbg = format!("{:?}", msg);
                     if let Some(sender) = sender {
+                        // Case: Asked
                         let msg_back = actors[turn].ask(msg).await;
                         let result = sender.send(msg_back);
                         if result.is_err() {
@@ -108,6 +104,7 @@ impl<
                             );
                         }
                     } else {
+                        // Case: Send
                         let result = actors[turn].send(msg).await;
                         if result.is_err() {
                             log::error!(
@@ -123,5 +120,60 @@ impl<
         });
 
         Ok(lb)
+    }
+
+    pub async fn send(&self, msg: Message) -> Result<(), std::io::Error> {
+        log::debug!("<{}> Push message: {:?}", self.name, msg);
+        let r = self.tx.send((msg, None)).await;
+        if r.is_err() {
+            return Err(std::io::Error::new(std::io::ErrorKind::Other, "Err").into());
+        }
+        Ok(())
+    }
+
+    pub async fn ask(&self, msg: Message) -> Result<Response, Error> {
+        log::debug!("<{}> Push message: {:?}", self.name, msg);
+        let (sender, reciever) = oneshot::channel();
+        {
+            let r = self.tx.send((msg, Some(sender))).await;
+            if r.is_err() {
+                return Err(std::io::Error::new(std::io::ErrorKind::Other, "Err").into());
+            }
+        }
+        let response = reciever.await;
+
+        match response {
+            Ok(r) => r,
+            Err(_) => {
+                return Err(std::io::Error::new(std::io::ErrorKind::Other, "Err").into());
+            }
+        }
+    }
+
+    pub async fn stop(&self) -> Result<(), Error> {
+        if self.running.load(Ordering::SeqCst) == false {
+            return Ok(());
+        }
+        for actor_ref in &*self.actor_refs {
+            actor_ref.stop().await?;
+        }
+        Ok(())
+    }
+
+    pub async fn state(
+        &self,
+        id: usize,
+    ) -> Result<Arc<futures::lock::Mutex<State>>, std::io::Error> {
+        // Is there a difference between futures::lock::Mutex and tokio::sync::Mutex?
+        self.actor_refs[id].state().await
+    }
+}
+
+#[cfg(test)]
+mod balancer_test {
+    use super::*;
+    #[tokio::test]
+    async fn create() {
+        assert_eq!(1, 1);
     }
 }
