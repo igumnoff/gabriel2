@@ -2,6 +2,8 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use std::sync::Arc;
 
+use std::future::Future;
+
 use tokio::sync::{mpsc, oneshot, Mutex};
 
 use crate::{ActorRef, ActorRefTrait, ActorTrait, Handler, SSSD};
@@ -18,6 +20,7 @@ use crate::{ActorRef, ActorRefTrait, ActorTrait, Handler, SSSD};
 ///
 /// # Examples
 ///
+#[derive(Debug)]
 pub struct LoadBalancer<Actor, Message, State, Response, Error> {
     name: String,
     actor_refs: Arc<Vec<Arc<ActorRef<Actor, Message, State, Response, Error>>>>,
@@ -46,12 +49,20 @@ impl<
         builder: F,
     ) -> Result<Arc<Self>, Error>
     where
-        F: Fn(usize) -> Result<Arc<ActorRef<Actor, Message, State, Response, Error>>, Error>,
+        F: Fn(
+            usize,
+        ) -> std::pin::Pin<
+            Box<
+                dyn Future<
+                    Output = Result<Arc<ActorRef<Actor, Message, State, Response, Error>>, Error>,
+                >,
+            >,
+        >,
     {
         let mut instances = vec![];
 
         for id in 0..instances_amount {
-            instances.push(builder(id)?);
+            instances.push(builder(id).await?);
         }
 
         let (tx, mut rx) = mpsc::channel(1000);
@@ -65,59 +76,70 @@ impl<
         });
 
         let lb_clone = lb.clone();
-        let handler = tokio::runtime::Handle::current();
-        handler.spawn(async move {
-            let lb = lb_clone.clone();
-            lb.running.store(true, Ordering::SeqCst);
-            // TODO: Shutdown on .stop()
-            loop {
-                if !lb.running.load(Ordering::SeqCst) {
-                    break;
-                }
-                while let Some((msg, sender)) = rx.recv().await {
-                    let actors = lb.actor_refs.clone();
-                    let turn = lb
-                        .turn
-                        .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |x| {
-                            Some((x + 1) % actors.len())
-                        });
+        let handle = tokio::runtime::Handle::current();
+        {
+            println!("A");
+            let _ = handle.spawn(async move {
+                println!("A");
+                let lb = lb_clone.clone();
+                lb.running.store(true, Ordering::SeqCst);
+                // TODO: Shutdown on .stop()
+                loop {
+                    if lb.running.load(Ordering::SeqCst) == false {
+                        break;
+                    }
+                    while let Some((msg, sender)) = rx.recv().await {
+                        let actors = lb.actor_refs.clone();
+                        let turn = lb
+                            .turn
+                            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |x| {
+                                Some((x + 1) % actors.len())
+                            });
+                        log::debug!("<{}> Got message: {:?}, Turn: {:?}", lb.name, msg, turn);
 
-                    let turn = match turn {
-                        Err(val) => {
-                            log::error!("Failed to update LoadBalancer.turn");
-                            val
-                        }
-                        Ok(val) => val,
-                    };
+                        let turn = match turn {
+                            Err(val) => {
+                                log::error!("Failed to update LoadBalancer.turn");
+                                val
+                            }
+                            Ok(val) => val,
+                        };
 
-                    let msg_dbg = format!("{:?}", msg);
-                    if let Some(sender) = sender {
-                        // Case: Asked
-                        let msg_back = actors[turn].ask(msg).await;
-                        let result = sender.send(msg_back);
-                        if result.is_err() {
-                            log::error!(
-                                "<{}> Error: {:?} on message: {}",
+                        let msg_dbg = format!("{:?}", msg);
+                        if let Some(sender) = sender {
+                            // Case: Asked
+                            // Spawn tasks to parallelize?
+                            let msg_back = actors[turn].ask(msg).await;
+                            let result = sender.send(msg_back);
+                            if result.is_err() {
+                                log::error!(
+                                    "<{}> Error: {:?} on message: {}",
+                                    lb.name,
+                                    result,
+                                    msg_dbg
+                                );
+                            }
+                        } else {
+                            // Case: Send
+                            let result = actors[turn].send(msg).await;
+                            log::debug!(
+                                "<{}> Actor state: {:?}",
                                 lb.name,
-                                result,
-                                msg_dbg
+                                actors[turn].state().await
                             );
-                        }
-                    } else {
-                        // Case: Send
-                        let result = actors[turn].send(msg).await;
-                        if result.is_err() {
-                            log::error!(
-                                "<{}> Error: {:?} on message: {}",
-                                lb.name,
-                                result,
-                                msg_dbg
-                            );
+                            if result.is_err() {
+                                log::error!(
+                                    "<{}> Error: {:?} on message: {}",
+                                    lb.name,
+                                    result,
+                                    msg_dbg
+                                );
+                            }
                         }
                     }
                 }
-            }
-        });
+            });
+        }
 
         Ok(lb)
     }
@@ -166,14 +188,5 @@ impl<
     ) -> Result<Arc<futures::lock::Mutex<State>>, std::io::Error> {
         // Is there a difference between futures::lock::Mutex and tokio::sync::Mutex?
         self.actor_refs[id].state().await
-    }
-}
-
-#[cfg(test)]
-mod balancer_test {
-    use super::*;
-    #[tokio::test]
-    async fn create() {
-        assert_eq!(1, 1);
     }
 }
