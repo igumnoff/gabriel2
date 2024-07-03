@@ -1,0 +1,382 @@
+[33mcommit 89bd0591cf92fb978737f05ba764c387e2d253b2[m[33m ([m[1;36mHEAD -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m
+Author: Evgeny Igumnov <igumnovnsk@gmail.com>
+Date:   Sat Jun 22 13:06:50 2024 +0500
+
+    1.4.3
+
+[33mcommit f22447d6d887c82827232e6ef714b3f3632f1eba[m
+Author: Evgeny Igumnov <igumnovnsk@gmail.com>
+Date:   Sat Jun 22 12:44:43 2024 +0500
+
+    1.4.2
+
+[33mcommit 7006c9fea760389af4c21066d917a9790d600288[m
+Author: Evgeny Igumnov <igumnovnsk@gmail.com>
+Date:   Fri Jun 21 22:55:28 2024 +0500
+
+    1.4.1
+
+[33mcommit ad02ab8cb799cc0b4ac116b5020af636a29dc1cf[m
+Author: Evgeny Igumnov <igumnovnsk@gmail.com>
+Date:   Fri Jun 21 22:51:19 2024 +0500
+
+    Avoid mutex (#12)
+    
+    * mutex remove
+    
+    * mutex remove
+    
+    * mutex remove
+    
+    * mutex remove
+    
+    * mutex remove
+    
+    * mutex remove
+
+[33mcommit e31d2a7b2ed7bcb985da97a4020de0f3e9fd9c05[m
+Author: Evgeny Igumnov <igumnovnsk@gmail.com>
+Date:   Tue Jun 18 15:20:14 2024 +0500
+
+    1.4.0
+
+[33mcommit 156bf9f1d1a1d817da183314afce61f7266153f1[m
+Author: Evgeny Igumnov <igumnovnsk@gmail.com>
+Date:   Tue Jun 18 14:59:17 2024 +0500
+
+    Issue4 (#11)
+    
+    * merged with main
+    
+    * Merged with main
+    
+    * feat: almost implemented
+    
+    * polish
+    
+    * polish
+    
+    ---------
+    
+    Co-authored-by: usercommon <kirilnenashev@gmail.com>
+
+[33mcommit 9b9c6743b27205c23679189f0a21fff994a1d569[m
+Author: Evgeny Igumnov <igumnovnsk@gmail.com>
+Date:   Sun Jun 16 17:21:06 2024 +0500
+
+    Stream sink (#10)
+    
+    * sink init
+    
+    * sink init
+    
+    * sink init
+    
+    * sink finish
+    
+    * sink finish
+    
+    * sink finish
+    
+    * sink finish
+    
+    * sink finish
+    
+    * stream
+    
+    * stream
+    
+    * stream
+    
+    * stream
+    
+    * stream
+    
+    * stream
+    
+    * stream
+    
+    * stream
+    
+    * 1.3.0
+
+[33mcommit 89f0959b6e4814ae9830e2efeefdcbdd65afbb07[m
+Author: Evgeny Igumnov <igumnovnsk@gmail.com>
+Date:   Thu Jun 13 15:19:58 2024 +0500
+
+    Refactoring (#8)
+    
+    * refactoring begin
+    
+    * refactoring begin
+    
+    * refactoring begin
+    
+    * refactoring begin
+    
+    * refactoring begin
+    
+    * refactoring finish
+    
+    * 1.2.0
+
+[33mcommit 2b95e91044d8c8549f71bf2fc6bbc5c095b0d0c8[m
+Author: Evgeny Igumnov <igumnovnsk@gmail.com>
+Date:   Wed Jun 12 19:02:21 2024 +0500
+
+    1.1.1
+
+[33mcommit c947ae4bbe82cd9e5c5ddb9d2adac621e8217fbc[m
+Author: Evgeny Igumnov <igumnovnsk@gmail.com>
+Date:   Wed Jun 12 19:02:08 2024 +0500
+
+    1.1.1
+
+[33mcommit 2476e66c4cc46c0a2ab58be60017ee1d4c2a8fc9[m
+Author: Evgeny Igumnov <igumnovnsk@gmail.com>
+Date:   Wed Jun 12 18:58:40 2024 +0500
+
+    1.1.1
+
+[33mcommit 599e2b81929eda11972e1ac7a263055dfb580d78[m
+Author: Evgeny Igumnov <igumnovnsk@gmail.com>
+Date:   Wed Jun 12 15:20:11 2024 +0500
+
+    polish
+
+[33mcommit 5cb6a4990c71345c7f457d0e82f2ec2dd7f3ee42[m
+Author: Evgeny Igumnov <igumnovnsk@gmail.com>
+Date:   Wed Jun 12 14:22:47 2024 +0500
+
+    polish
+
+[33mcommit 626ab941ef379e134dfd96ca4525ff63085c7e74[m
+Author: Evgeny Igumnov <igumnovnsk@gmail.com>
+Date:   Wed Jun 12 12:12:32 2024 +0500
+
+    Update README.md
+
+[33mcommit 7a96f1a87431f3d80ef5bf1fcbff042fcb9ebbe0[m
+Author: Evgeny Igumnov <igumnovnsk@gmail.com>
+Date:   Wed Jun 12 12:03:46 2024 +0500
+
+    1.1.0
+
+[33mcommit a839a818d961b163f865e19f5bab5700cb165d2e[m
+Author: Evgeny Igumnov <igumnovnsk@gmail.com>
+Date:   Wed Jun 12 11:49:19 2024 +0500
+
+    1.1.0
+
+[33mcommit d53d95fbd54cd02270fa4d9c9eea9d4dc6814875[m
+Author: Evgeny Igumnov <igumnovnsk@gmail.com>
+Date:   Wed Jun 12 11:44:09 2024 +0500
+
+    polish
+
+[33mcommit 9762fad71dc34be04f690ff45fd545077aa6a240[m
+Author: Evgeny Igumnov <igumnovnsk@gmail.com>
+Date:   Wed Jun 12 11:32:46 2024 +0500
+
+    polish
+
+[33mcommit faa48e257372b4d06954ae06e32235fc735918e6[m
+Author: Evgeny Igumnov <igumnovnsk@gmail.com>
+Date:   Wed Jun 12 11:30:22 2024 +0500
+
+    polish
+
+[33mcommit ee4de42c2c1d522a2d5ce91498631edf779d00a7[m
+Author: Evgeny Igumnov <igumnovnsk@gmail.com>
+Date:   Wed Jun 12 11:19:36 2024 +0500
+
+    polish
+
+[33mcommit 866e67dbf3e1d0a3af7e4d30de8b086ba72f3fee[m
+Author: Evgeny Igumnov <igumnovnsk@gmail.com>
+Date:   Wed Jun 12 11:16:35 2024 +0500
+
+    Issue2 (#3)
+    
+    * remote init
+    
+    * polish
+    
+    * polish
+    
+    * client/server connection
+    
+    * client/server connection
+    
+    * client/server connection
+    
+    * polish
+    
+    * polish
+    
+    * polish
+    
+    * polish
+    
+    * polish
+    
+    * polish
+    
+    * polish
+    
+    * polish
+    
+    * polish
+    
+    * polish
+    
+    * polish
+    
+    * polish
+    
+    * polish
+    
+    * polish
+    
+    * polish
+    
+    * polish
+    
+    * polish
+    
+    * polish
+    
+    * polish
+    
+    * polish
+    
+    * polish
+    
+    * 1.1.0
+
+[33mcommit 304ade148ad179af47433892c804e00c602887b7[m
+Author: Evgeny Igumnov <igumnovnsk@gmail.com>
+Date:   Sun Jun 9 11:27:37 2024 +0500
+
+    Update README.md
+
+[33mcommit c8153586a51acbabd487e89df1fdfa2263418209[m
+Author: Evgeny Igumnov <igumnovnsk@gmail.com>
+Date:   Sun Jun 9 11:27:19 2024 +0500
+
+    Update README.md
+
+[33mcommit 130213c74df145adae562b813a5b5fb844406492[m
+Author: Evgeny Igumnov <igumnovnsk@gmail.com>
+Date:   Sun Jun 9 10:24:36 2024 +0500
+
+    fn stop initiate drop actor
+
+[33mcommit da97e8f975fce80115396fd9fc4ad68425bf536c[m
+Author: Evgeny Igumnov <igumnovnsk@gmail.com>
+Date:   Sun Jun 9 09:52:44 2024 +0500
+
+    fn stop initiate drop actor
+
+[33mcommit 6e5693897e53d0f322afcb260718c60be699281e[m
+Author: Evgeny Igumnov <igumnovnsk@gmail.com>
+Date:   Sun Jun 9 08:31:04 2024 +0500
+
+    Update Cargo.toml
+
+[33mcommit 73b8f488805448f4fdb0e6eeb86784eddc8c4be8[m
+Author: Evgeny Igumnov <igumnovnsk@gmail.com>
+Date:   Sun Jun 9 08:30:23 2024 +0500
+
+    Update README.md
+
+[33mcommit c943ec9ad93e857dff0c39666c9885650eb32e0a[m
+Author: Evgeny Igumnov <igumnovnsk@gmail.com>
+Date:   Wed May 8 15:34:53 2024 +0500
+
+    Update README.md
+
+[33mcommit fa3ffd418eab99c9b28893219414e520302f8278[m
+Author: Evgeny Igumnov <igumnovnsk@gmail.com>
+Date:   Wed May 8 15:31:09 2024 +0500
+
+    Create CLA
+
+[33mcommit 28c7add62f709a7112152eebc761011189bf2acf[m
+Author: Evgeny Igumnov <igumnovnsk@gmail.com>
+Date:   Sat May 4 14:27:56 2024 +0500
+
+    1.0.5
+
+[33mcommit 0b08436c6c5116b3005fd4a3c691b7c4a6e9be04[m
+Author: Evgeny Igumnov <igumnovnsk@gmail.com>
+Date:   Sat May 4 14:22:59 2024 +0500
+
+    1.0.4
+
+[33mcommit d1b5d05cb3b167996ed4cfe7f7a186cfbcd2c854[m
+Author: Evgeny Igumnov <igumnovnsk@gmail.com>
+Date:   Sat May 4 14:11:35 2024 +0500
+
+    1.0.3
+
+[33mcommit 3fb1f37963dc1a59ca0ca86146be49810acf89ec[m
+Author: Evgeny Igumnov <igumnovnsk@gmail.com>
+Date:   Sat May 4 14:11:03 2024 +0500
+
+    1.0.2
+
+[33mcommit 5f4bbf31c6f8b805a50eee42fd2ffdf909abfd3e[m
+Author: Evgeny Igumnov <igumnovnsk@gmail.com>
+Date:   Sun Apr 28 18:15:59 2024 +0500
+
+    Update README.md
+
+[33mcommit 5ab400e1e2ee09a5a79f1d0a2d861f61881ff7ea[m
+Author: Evgeny Igumnov <igumnovnsk@gmail.com>
+Date:   Sun Apr 28 16:21:03 2024 +0500
+
+    Update README.md
+
+[33mcommit ffc370d31c7eb03144ef5af8ce733ab02d90c558[m
+Author: Evgeny Igumnov <igumnovnsk@gmail.com>
+Date:   Tue Mar 19 23:10:10 2024 +0500
+
+    1.0.1
+
+[33mcommit 866c3fbcf2f2720a204f0436c001b4d17fd781d5[m
+Author: Evgeny Igumnov <igumnovnsk@gmail.com>
+Date:   Tue Mar 19 08:57:40 2024 +0500
+
+    1.0.1
+
+[33mcommit fad1195140a5750cd5f6fdddd1014e12cdf17ab8[m
+Author: Evgeny Igumnov <igumnovnsk@gmail.com>
+Date:   Tue Mar 19 08:55:22 2024 +0500
+
+    1.0.0
+
+[33mcommit 92e196689d8483354a1e6ab6f35197ad3d515655[m
+Author: Evgeny Igumnov <igumnovnsk@gmail.com>
+Date:   Tue Mar 19 08:53:26 2024 +0500
+
+    1.0.0
+
+[33mcommit 561dce56e96be0adaca3eca7e4c745d7f4519f72[m
+Author: Evgeny Igumnov <igumnovnsk@gmail.com>
+Date:   Tue Mar 19 08:42:33 2024 +0500
+
+    initial commit
+
+[33mcommit 9c5d224104a2ab52f94cbe4eccc0879386571805[m
+Author: Evgeny Igumnov <igumnovnsk@gmail.com>
+Date:   Tue Mar 19 08:23:47 2024 +0500
+
+    initial commit
+
+[33mcommit bc44b171f03a85701d439fb6a2ae90b0d24c2d01[m
+Author: Evgeny Igumnov <igumnovnsk@gmail.com>
+Date:   Tue Mar 19 07:57:49 2024 +0500
+
+    initial commit
+
