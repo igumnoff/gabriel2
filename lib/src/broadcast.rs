@@ -46,7 +46,7 @@ where
     }
 }
 
-/// # Event Bus
+// # Event Bus
 ///
 /// `EventBus<E>`, where `E` implements `Event`
 ///
