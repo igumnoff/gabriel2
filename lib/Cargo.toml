@@ -19,7 +19,7 @@ log = "0.4.17"
 tokio = { version = "1.25.0", optional = true }
 bincode = { version = "2.0.0-rc.3", optional = true }
 async-stream = "0.3.5"
-dashmap = "*"
+dashmap = "6.0.1"
 [package.metadata.docs.rs]
 features = ["remote", "broadcast", "sink-stream"]
 
