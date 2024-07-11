@@ -226,11 +226,11 @@ mod tests {
         for _ in 0..30 {
             lb.send(EchoMessage::Ping).await.unwrap();
         }
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
         let mut res = 0;
         for id in 0..10 {
             let r = lb.state(id).await.unwrap().lock().await.counter;
-
             res += r;
         }
 

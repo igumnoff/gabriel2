@@ -18,6 +18,12 @@ use crate::{ActorRef, ActorRefTrait, ActorTrait, Handler, SSSD};
 /// * `stop` - Deactivates the `LoadBalancer` and all associated actors.
 /// * `state` - Retrieves the state of a specified actor identified by its ID.
 ///
+/// # Fields
+/// * `name` - name of load balancer
+/// * `actor_refs` - is a collection of all ActorRef which is used by load balancer
+/// * `tx` - transmitter channel which provides `send` and `ask`
+/// * `running` - can tell is load balancer alive or not
+///
 /// # Examples
 ///
 #[derive(Debug)]
@@ -78,65 +84,70 @@ impl<
         let lb_clone = lb.clone();
         let handle = tokio::runtime::Handle::current();
         {
-            println!("A");
             let _ = handle.spawn(async move {
-                println!("A");
                 let lb = lb_clone.clone();
                 lb.running.store(true, Ordering::SeqCst);
                 // TODO: Shutdown on .stop()
                 loop {
-                    if lb.running.load(Ordering::SeqCst) == false {
-                        break;
-                    }
-                    while let Some((msg, sender)) = rx.recv().await {
-                        let actors = lb.actor_refs.clone();
-                        let turn = lb
-                            .turn
-                            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |x| {
-                                Some((x + 1) % actors.len())
-                            });
-                        log::debug!("<{}> Got message: {:?}, Turn: {:?}", lb.name, msg, turn);
-
-                        let turn = match turn {
-                            Err(val) => {
-                                log::error!("Failed to update LoadBalancer.turn");
-                                val
+                    tokio::select! {
+                        _ = tokio::time::sleep(tokio::time::Duration::from_secs(1)) => {
+                            if lb.running.load(Ordering::SeqCst) == false {
+                                break;
                             }
-                            Ok(val) => val,
-                        };
+                        },
+                        recieved = rx.recv() => {
+                            if let Some((msg, sender)) = recieved {
+                                let actors = lb.actor_refs.clone();
+                                let turn = lb
+                                    .turn
+                                    .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |x| {
+                                        Some((x + 1) % actors.len())
+                                    });
+                                log::debug!("<{}> Got message: {:?}, Turn: {:?}", lb.name, msg, turn);
 
-                        let msg_dbg = format!("{:?}", msg);
-                        if let Some(sender) = sender {
-                            // Case: Asked
-                            // Spawn tasks to parallelize?
-                            let msg_back = actors[turn].ask(msg).await;
-                            let result = sender.send(msg_back);
-                            if result.is_err() {
-                                log::error!(
-                                    "<{}> Error: {:?} on message: {}",
-                                    lb.name,
-                                    result,
-                                    msg_dbg
-                                );
-                            }
-                        } else {
-                            // Case: Send
-                            let result = actors[turn].send(msg).await;
-                            log::debug!(
-                                "<{}> Actor state: {:?}",
-                                lb.name,
-                                actors[turn].state().await
-                            );
-                            if result.is_err() {
-                                log::error!(
-                                    "<{}> Error: {:?} on message: {}",
-                                    lb.name,
-                                    result,
-                                    msg_dbg
-                                );
+                                let turn = match turn {
+                                    Err(val) => {
+                                        log::error!("Failed to update LoadBalancer.turn");
+                                        val
+                                    }
+                                    Ok(val) => val,
+                                };
+
+                                let msg_dbg = format!("{:?}", msg);
+                                if let Some(sender) = sender {
+                                    // Case: Asked
+                                    // Spawn tasks to parallelize?
+                                    let msg_back = actors[turn].ask(msg).await;
+                                    let result = sender.send(msg_back);
+                                    if result.is_err() {
+                                        log::error!(
+                                            "<{}> Error: {:?} on message: {}",
+                                            lb.name,
+                                            result,
+                                            msg_dbg
+                                        );
+                                    }
+                                } else {
+                                    // Case: Send
+                                    let result = actors[turn].send(msg).await;
+                                    log::debug!(
+                                        "<{}> Actor state: {:?}",
+                                        lb.name,
+                                        actors[turn].state().await
+                                    );
+                                    if result.is_err() {
+                                        log::error!(
+                                            "<{}> Error: {:?} on message: {}",
+                                            lb.name,
+                                            result,
+                                            msg_dbg
+                                        );
+                                    }
+                                }
                             }
                         }
                     }
+                    
                 }
             });
         }
@@ -189,4 +200,5 @@ impl<
         // Is there a difference between futures::lock::Mutex and tokio::sync::Mutex?
         self.actor_refs[id].state().await
     }
+
 }
