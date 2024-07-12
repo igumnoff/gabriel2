@@ -1,9 +1,8 @@
-use std::sync::Arc;
 use gabriel2::*;
+use std::sync::{Arc};
 
 use bincode::{Decode, Encode};
 use derive_more::{Display, Error};
-
 
 #[derive(Debug, Encode, Decode)]
 pub struct EchoActor;
@@ -15,15 +14,15 @@ pub enum EchoMessage {
 
 #[derive(Debug, Encode, Decode)]
 pub enum EchoResponse {
-    Pong {counter: u32},
+    Pong { counter: u32 },
 }
 
-#[derive(Debug,Clone, Encode, Decode)]
+#[derive(Debug, Clone, Encode, Decode)]
 pub struct EchoState {
     pub counter: u32,
 }
 
-#[derive(Debug, Display, Error,  Encode, Decode)]
+#[derive(Debug, Display, Error, Encode, Decode)]
 pub enum EchoError {
     #[display(fmt = "Unknown error")]
     Unknown,
@@ -42,7 +41,10 @@ impl Handler for EchoActor {
     type Response = EchoResponse;
     type Error = EchoError;
 
-    async fn receive(&self, ctx: Arc<Context<Self::Actor, Self::Message, Self::State, Self::Response, Self::Error>>) -> Result<EchoResponse, EchoError> {
+    async fn receive(
+        &self,
+        ctx: Arc<Context<Self::Actor, Self::Message, Self::State, Self::Response, Self::Error>>,
+    ) -> Result<EchoResponse, EchoError> {
         match ctx.mgs {
             EchoMessage::Ping => {
                 println!("Received Ping");
@@ -51,7 +53,9 @@ impl Handler for EchoActor {
                 if state_lock.counter > 10 {
                     Err(EchoError::Unknown)
                 } else {
-                    Ok(EchoResponse::Pong{counter: state_lock.counter})
+                    Ok(EchoResponse::Pong {
+                        counter: state_lock.counter,
+                    })
                 }
             }
         }

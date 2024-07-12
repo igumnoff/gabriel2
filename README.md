@@ -17,9 +17,8 @@ Gabriel2: Indeed, an actor library based on Tokio, written in Rust
 - [x] Stream from actor
 - [x] Remote Actor
 - [x] Event Bus
+- [x] Load Balancer
 
-## TODO
-- [ ] Load Balancer
 
 ## Usage
 
@@ -27,7 +26,7 @@ Cargo.toml
 
 ```toml
 [dependencies]
-gabriel2 = { version = "1.4.1", features = ["remote", "sink-stream", "broadcast"] }
+gabriel2 = { version = "1.5.0", features = ["remote", "sink-stream", "broadcast", "balancer"] }
 ```
 
 echo.rs
@@ -259,6 +258,38 @@ async fn main() -> Result<(), EchoError> {
     Ok(())
 }
 ``` 
+
+### Load Balancer
+
+```rust
+#[tokio::main]
+async fn main() -> Result<(), EchoError> {
+    let echo_load_balancer: Arc<LoadBalancer<EchoActor, EchoMessage, EchoState, EchoResponse, EchoError>> =
+        LoadBalancer::new("echo_load_balancer", 10, |id: usize| {
+            Box::pin(async move {
+                let user: Arc<
+                    ActorRef<EchoActor, EchoMessage, EchoState, EchoResponse, EchoError>,
+                > = ActorRef::new(
+                    format!("echo-{}", id),
+                    EchoActor {},
+                    EchoState { counter: 0 },
+                    10000,
+                )
+                    .await?;
+                Ok(user)
+            })
+        })
+            .await
+            .unwrap();
+
+    for _ in 0..30 {
+        echo_load_balancer.send(EchoMessage::Ping).await?;
+    }
+
+    Ok(())
+}
+``` 
+
 
 ## Contributing
 I would love to see contributions from the community. If you experience bugs, feel free to open an issue. If you would like to implement a new feature or bug fix, please follow the steps:

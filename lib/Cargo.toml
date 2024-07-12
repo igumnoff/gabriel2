@@ -1,6 +1,6 @@
 [package]
 name = "gabriel2"
-version = "1.4.3"
+version = "1.5.0"
 edition = "2021"
 
 authors = ["Evgeny Igumnov <igumnovnsk@gmail.com>"]
@@ -16,16 +16,18 @@ description = "Gabriel2: Indeed, an actor library based on Tokio, written in Rus
 [dependencies]
 futures = "0.3.26"
 log = "0.4.17"
+env_logger = "0.11.3"
 tokio = { version = "1.25.0", optional = true }
 bincode = { version = "2.0.0-rc.3", optional = true }
 async-stream = "0.3.5"
 
 [package.metadata.docs.rs]
-features = ["remote", "broadcast", "sink-stream"]
+features = ["remote", "broadcast", "sink-stream", "balancer"]
 
 [features]
 default = ["all"]
-all = ["remote", "sink-stream", "broadcast", "tokio/io-util", "tokio/sync", "tokio/rt", "tokio/rt-multi-thread", "tokio/macros", "tokio/tokio-macros", "tokio/signal", "tokio/time"]
+all = ["remote", "sink-stream", "broadcast", "balancer", "tokio/io-util", "tokio/sync", "tokio/rt", "tokio/rt-multi-thread", "tokio/macros", "tokio/tokio-macros", "tokio/signal", "tokio/time"]
 remote = ["tokio/net", "bincode"]
 sink-stream = []
 broadcast = []
+balancer = ["tokio/rt", "tokio/sync"]
