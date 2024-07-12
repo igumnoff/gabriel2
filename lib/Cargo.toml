@@ -1,6 +1,6 @@
 [package]
 name = "gabriel2"
-version = "1.4.3"
+version = "1.5.0"
 edition = "2021"
 
 authors = ["Evgeny Igumnov <igumnovnsk@gmail.com>"]
@@ -22,7 +22,7 @@ bincode = { version = "2.0.0-rc.3", optional = true }
 async-stream = "0.3.5"
 
 [package.metadata.docs.rs]
-features = ["remote", "broadcast", "sink-stream"]
+features = ["remote", "broadcast", "sink-stream", "balancer"]
 
 [features]
 default = ["all"]

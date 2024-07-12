@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use std::future::Future;
 
-use tokio::sync::{mpsc, oneshot, Mutex};
+use tokio::sync::{mpsc, oneshot};
 
 use crate::{ActorRef, ActorRefTrait, ActorTrait, Handler, SSSD};
 

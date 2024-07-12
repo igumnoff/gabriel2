@@ -204,7 +204,9 @@ mod tests {
 
     #[tokio::test]
     async fn create_load_balancer() {
-        env_logger::init();
+        // env_logger::init();
+        let _ = env_logger::Builder::from_env(env_logger::Env::new().default_filter_or("trace")).try_init();
+
         let lb: Arc<LoadBalancer<EchoActor, EchoMessage, EchoState, EchoResponse, EchoError>> =
             LoadBalancer::new("user_load_balancer", 10, |id: usize| {
                 Box::pin(async move {

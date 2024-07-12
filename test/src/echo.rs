@@ -1,5 +1,5 @@
 use gabriel2::*;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc};
 
 use bincode::{Decode, Encode};
 use derive_more::{Display, Error};
